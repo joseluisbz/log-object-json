@@ -106,4 +106,11 @@ Language logos are trademarks of their respective owners and are used only to id
 
 ## License
 
-To be defined.
+Copyright (C) 2026 Jose Luis Bernal Zambrano
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+**GNU General Public License version 3** (or, at your option, any later version), as published by the
+Free Software Foundation. It is distributed WITHOUT ANY WARRANTY. See [LICENSE](LICENSE).
+
+The bundled third-party components keep their own licenses (MIT, Apache-2.0, BSD-3-Clause, public
+domain — see *Credits*); all of them are compatible with the GPL-3.0.
