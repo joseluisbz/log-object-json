@@ -103,7 +103,8 @@ public class JsonViewerPanel extends JPanel {
         var btnValidate = new JButton(Messages.get("json.validate"));
         btnValidate.addActionListener(e -> validateJson());
 
-        var btnCopy = new JButton(Messages.get("json.copy"));
+        var btnCopy = new JButton(new CopyIcon(16));
+        btnCopy.setToolTipText(Messages.get("json.copy.tip"));
         btnCopy.addActionListener(e -> copy());
 
         // Find/Replace (Ctrl+F / Ctrl+H); replace only in Editable mode
@@ -118,7 +119,7 @@ public class JsonViewerPanel extends JPanel {
         bar.add(btnValidate);
         bar.add(btnCopy);
 
-        var btnSave = new JButton(Messages.get("json.save"), new SaveIcon(16));
+        var btnSave = new JButton(new SaveIcon(16));
         btnSave.setToolTipText(Messages.get("json.save.tip"));
         btnSave.addActionListener(e -> save());
         bar.add(btnSave);
