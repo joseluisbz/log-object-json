@@ -24,6 +24,7 @@ public class SessionPanel extends JPanel {
 
     private final JTabbedPane trios = new JTabbedPane();
     private final TrioPanel main;
+    private JToggleButton compareToggle;
 
     /**
      * @param onTitleChange reports the session title (loaded file or "Pasted text")
@@ -47,6 +48,7 @@ public class SessionPanel extends JPanel {
         // CAREFUL: no tooltip on the label (it would capture the clicks and the tab could not be selected)
         var title = new JLabel(Messages.get("trio.root"), TreeIcons.OBJECT, SwingConstants.LEFT);
         var compare = FindReplacePanel.FlatButton.toggle("⇄", Messages.get("compare.toggle.tip"));
+        compareToggle = compare;
         compare.setMargin(new Insets(0, 4, 0, 4));
         compare.addActionListener(e -> {
             main.setComparing(compare.isSelected());
@@ -55,6 +57,12 @@ public class SessionPanel extends JPanel {
         panel.add(title);
         panel.add(compare);
         return panel;
+    }
+
+    /** Restores the Root trio (and its comparison, if it was active). */
+    public void restoreRoot(TrioPanel.Snapshot s) {
+        main.restore(s);
+        compareToggle.setSelected(main.isComparing());
     }
 
     /** The Root trio (loaded or pasted text). */

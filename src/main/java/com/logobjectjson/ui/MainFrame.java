@@ -43,7 +43,7 @@ public class MainFrame extends JFrame {
         });
 
         if (restore.isEmpty()) newSession();
-        else restore.forEach(s -> newSession().root().restore(s));
+        else restore.forEach(s -> newSession().restoreRoot(s));
         if (sessions.getTabCount() > 1) sessions.setSelectedIndex(0);
         setContentPane(sessions);
         setJMenuBar(languageBar());

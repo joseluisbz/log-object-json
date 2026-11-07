@@ -669,6 +669,53 @@ class FlowsSpec extends UiSpec {
         json(main()) != null
     }
 
+    def "compare survives a language change (Pattern, Sample and the ⇄ state)"() {
+        given:
+        setText(main(), 'P INFO Order(id=7, customer=Ann)')
+        waitInSync(main())
+        onEdt { findAll(trios().getTabComponentAt(0) as Container, JToggleButton)[0].doClick() }
+        onEdt { main().@compare.setSampleText('S INFO Order(id=8)') }
+        eventually.eventually { assert onEdt { main().@compare.lastDiff() } != null }
+        def previous = Messages.language()
+
+        when:
+        frame = onEdt { frame.switchLanguage('it') }
+
+        then:
+        onEdt { main().isComparing() }
+        onEdt { findAll(trios().getTabComponentAt(0) as Container, JToggleButton)[0].selected }
+        onEdt { main().@compare.sampleArea().text } == 'S INFO Order(id=8)'
+        eventually.eventually { assert onEdt { main().@compare.lastDiff() } != null }
+
+        cleanup:
+        frame = onEdt { frame.switchLanguage(previous) }
+    }
+
+    def "stress compare: a ~200,000 character line with 900 value differences keeps the UI responsive"() {
+        given:
+        def pattern = 'P INFO Big(' + (1..9000).collect { "field$it=value$it" }.join(', ') + ')'
+        def sample  = 'S INFO Big(' + (1..9000).collect { "field$it=" + (it % 10 == 0 ? "changed$it" : "value$it") }.join(', ') + ')'
+        setText(main(), pattern)
+        waitInSync(main())
+        onEdt { findAll(trios().getTabComponentAt(0) as Container, JToggleButton)[0].doClick() }
+
+        when: 'the sample is set; meanwhile the EDT is probed every 100 ms'
+        onEdt { main().@compare.setSampleText(sample) }
+        long worst = 0
+        long until = System.nanoTime() + 6_000_000_000L
+        while (System.nanoTime() < until && onEdt { main().@compare.lastDiff() } == null) {
+            long t0 = System.nanoTime()
+            onEdt { null }
+            worst = Math.max(worst, (System.nanoTime() - t0).intdiv(1_000_000))
+            Thread.sleep(100)
+        }
+
+        then:
+        eventually.eventually { assert onEdt { main().@compare.lastDiff() } != null }
+        onEdt { main().@compare.lastDiff().differences() } == 900
+        worst < 1000
+    }
+
     def "tree search has the editors' options: Cc, W, .*, 'No results' and history"() {
         given:
         setText(main(), LOG)

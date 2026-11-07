@@ -87,6 +87,8 @@ final class CompareController {
         void restoreTree();
         void status(String text);
         File proposedJsonFile();
+        /** File the Pattern was loaded from, or null. */
+        Path patternFile();
         void setPatternEditable(boolean editable);
     }
 
@@ -110,8 +112,11 @@ final class CompareController {
     };
     private final ValidateIcon sampleIcon = new ValidateIcon(16);
     private final JButton btnSampleStatus = new JButton(sampleIcon);
-    private final JLabel lblSampleFile = new JLabel(" ");
+    private final JLabel lblSampleTitle = new JLabel();
     private final Timer sampleSync = new Timer(Config.integer("sync.delayMs"), e -> parseSample());
+    /** Discards results of outdated background work (the text changed meanwhile). */
+    private int generation;
+    private static final int MAX_EXPANDED = Config.integer("compare.maxExpanded");
     private ParsedEntry sampleEntry;
     private Path sampleFile;
 
@@ -162,9 +167,9 @@ final class CompareController {
         originalSource = sourceView;
         host.setPatternEditable(false);          // the Pattern is the reference: locked by default
 
-        lblPatternTitle.setText(Messages.get("compare.pattern"));
+        updateTitles();
         var left = titled(lblPatternTitle, sourceView);
-        var right = titled(new JLabel(Messages.get("compare.sample")), samplePanel());
+        var right = titled(lblSampleTitle, samplePanel());
         sourceSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, right);
         sourceSplit.setResizeWeight(0.5);
         sourceSplit.setContinuousLayout(true);
@@ -174,6 +179,15 @@ final class CompareController {
 
         host.showJson(jsonPanel());
         recompute();
+    }
+
+    /** "Pattern 🔒 — … · file.log" / "Sample — … · file.log". */
+    void updateTitles() {
+        var pf = host.patternFile();
+        lblPatternTitle.setText(Messages.get("compare.pattern") + (pf == null ? "" : "  ·  " + pf.getFileName()));
+        lblPatternTitle.setToolTipText(pf == null ? null : pf.toAbsolutePath().toString());
+        lblSampleTitle.setText(Messages.get("compare.sample") + (sampleFile == null ? "" : "  ·  " + sampleFile.getFileName()));
+        lblSampleTitle.setToolTipText(sampleFile == null ? null : sampleFile.toAbsolutePath().toString());
     }
 
     void leave() {
@@ -224,7 +238,6 @@ final class CompareController {
         bar.add(EditToggle.create(sampleArea, true, Messages.get("source.editable.tip"), null));
         bar.add(btnOpen);
         bar.add(btnCopy);
-        bar.add(lblSampleFile);
         bar.add(Box.createHorizontalGlue());
         bar.add(tglValues);
 
@@ -299,16 +312,15 @@ final class CompareController {
             } catch (MalformedInputException ex) {
                 content = Files.readString(path, StandardCharsets.ISO_8859_1);
             }
-            setSampleText(content);
             sampleFile = path;
-            lblSampleFile.setText(path.getFileName().toString());
-            lblSampleFile.setToolTipText(path.toAbsolutePath().toString());
+            updateTitles();
+            setSampleText(content);
         } catch (IOException ex) {
             ErrorDialog.show(sampleArea, Messages.get("error.readFile", ex.getMessage()), ex);
         }
     }
 
-    /** Sets the Sample text and compares at once (also used by the tests). */
+    /** Sets the Sample text and compares (in the background; also used by the tests). */
     void setSampleText(String text) {
         sampleArea.setText(text);
         sampleArea.setCaretPosition(0);
@@ -316,21 +328,48 @@ final class CompareController {
         parseSample();
     }
 
+    /** Restores the Sample after rebuilding the window (e.g. language change). */
+    void restoreSample(String text, Path file) {
+        sampleFile = file;
+        updateTitles();
+        setSampleText(text);
+    }
+
+    Path sampleFile() {
+        return sampleFile;
+    }
+
+    /** Parses the Sample in the background (big logs must not freeze the UI), then compares. */
     private void parseSample() {
         String text = sampleArea.getText();
+        int gen = ++generation;
         sampleEntry = null;
         if (text.isBlank()) {
             sampleStatus(ValidateIcon.State.NONE, Messages.get("compare.sample.placeholder"));
-        } else {
-            var valid = LogExtractor.extractAll(text).stream().filter(e -> !e.isError()).toList();
-            if (valid.isEmpty()) sampleStatus(ValidateIcon.State.INVALID, Messages.get("compare.sample.none"));
-            else if (valid.size() > 1) sampleStatus(ValidateIcon.State.INVALID, Messages.get("compare.sample.several", valid.size()));
-            else {
-                sampleEntry = valid.get(0);
-                sampleStatus(ValidateIcon.State.VALID, Messages.get("compare.sample.ok"));
-            }
+            recompute();
+            return;
         }
-        recompute();
+        sampleStatus(ValidateIcon.State.PENDING, Messages.get("sync.updating"));
+        new SwingWorker<List<ParsedEntry>, Void>() {
+            @Override protected List<ParsedEntry> doInBackground() {
+                return LogExtractor.extractAll(text).stream().filter(e -> !e.isError()).toList();
+            }
+            @Override protected void done() {
+                if (gen != generation || !text.equals(sampleArea.getText())) return;
+                try {
+                    var valid = get();
+                    if (valid.isEmpty()) sampleStatus(ValidateIcon.State.INVALID, Messages.get("compare.sample.none"));
+                    else if (valid.size() > 1) sampleStatus(ValidateIcon.State.INVALID, Messages.get("compare.sample.several", valid.size()));
+                    else {
+                        sampleEntry = valid.get(0);
+                        sampleStatus(ValidateIcon.State.VALID, Messages.get("compare.sample.ok"));
+                    }
+                } catch (Exception ex) {
+                    sampleStatus(ValidateIcon.State.INVALID, String.valueOf(ex.getCause() != null ? ex.getCause() : ex));
+                }
+                recompute();
+            }
+        }.execute();
     }
 
     private void sampleStatus(ValidateIcon.State state, String tip) {
@@ -357,20 +396,43 @@ final class CompareController {
             host.status(Messages.get("compare.waiting"));
             return;
         }
-        Node diff = ObjectDiff.compare(pattern.parsed(), sampleEntry.parsed());
-        if (!showValues) diff = withoutValueDiffs(diff);
+        // Heavy part (diff, tree nodes, comparison JSON) in the background; the UI is updated after
+        int gen = ++generation;
+        var sample = sampleEntry;
+        boolean values = showValues;
+        new SwingWorker<Object[], Void>() {
+            @Override protected Object[] doInBackground() {
+                Node d = ObjectDiff.compare(pattern.parsed(), sample.parsed());
+                if (!values) d = withoutValueDiffs(d);
+                return new Object[]{d, treeNode(d, null, new ArrayList<>()), MergedJson.of(d)};
+            }
+            @Override protected void done() {
+                if (gen != generation || !active) return;
+                try {
+                    var r = get();
+                    show((Node) r[0], (DefaultMutableTreeNode) r[1], (MergedJson.Result) r[2], pattern, sample);
+                } catch (Exception ex) {
+                    host.status(String.valueOf(ex.getCause() != null ? ex.getCause() : ex));
+                }
+            }
+        }.execute();
+    }
+
+    /** Applies a computed comparison to the tree, the texts and the JSON (EDT). */
+    private void show(Node diff, DefaultMutableTreeNode root, MergedJson.Result merged, ParsedEntry pattern, ParsedEntry sample) {
+        clearHighlights();
         lastDiff = diff;
 
         // Tree
-        var root = treeNode(diff, null, new ArrayList<>());
         host.tree().setModel(new DefaultTreeModel(root));
         expandDifferences(root);
 
-        // Texts
-        highlight(diff, new ArrayList<>(), pattern, sampleEntry);
+        // Texts (capped on huge lines, like the search highlights)
+        budget.put(host.patternArea(), highlightBudget(host.patternArea()));
+        budget.put(sampleArea, highlightBudget(sampleArea));
+        highlight(diff, new ArrayList<>(), pattern, sample);
 
         // JSON
-        var merged = MergedJson.of(diff);
         mergedEditor.setEmptyMessage(null);
         mergedEditor.setText(merged.text());
         mergedEditor.setCaretPosition(0);
@@ -453,16 +515,32 @@ final class CompareController {
         return ObjectTreeBuilder.formatLeaf(v);
     }
 
-    /** Expands the path to every difference. */
+    /** Expands the paths to the differences (at most compare.maxExpanded, so big comparisons stay fast). */
     private void expandDifferences(DefaultMutableTreeNode root) {
         var tree = host.tree();
         tree.expandRow(0);
-        for (var en = root.preorderEnumeration(); en.hasMoreElements(); ) {
+        var expanded = new java.util.HashSet<Object>();
+        for (var en = root.preorderEnumeration(); en.hasMoreElements() && expanded.size() < MAX_EXPANDED; ) {
             var n = (DefaultMutableTreeNode) en.nextElement();
-            if (n.getUserObject() instanceof DiffTreeValue d && d.status() != Status.SAME && n.getParent() != null) {
+            if (n.getUserObject() instanceof DiffTreeValue d && d.status() != Status.SAME && n.getParent() != null
+                    && expanded.add(n.getParent())) {
                 tree.expandPath(new TreePath(((DefaultMutableTreeNode) n.getParent()).getPath()));
             }
         }
+    }
+
+    /** Remaining highlights allowed per text (huge lines make each highlight expensive to paint). */
+    private final Map<JTextComponent, Integer> budget = new java.util.HashMap<>();
+
+    private static int highlightBudget(JTextComponent area) {
+        var root = area.getDocument().getDefaultRootElement();
+        int maxLine = 0;
+        for (int i = 0; i < root.getElementCount(); i++) {
+            var el = root.getElement(i);
+            maxLine = Math.max(maxLine, el.getEndOffset() - el.getStartOffset());
+        }
+        return maxLine > Config.integer("search.longLine")
+                ? Config.integer("search.maxMarkLongLine") : Config.integer("search.maxMarkAll");
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -485,6 +563,9 @@ final class CompareController {
     }
 
     private void mark(JTextComponent area, ParsedEntry entry, List<Object> path, Color c) {
+        int left = budget.getOrDefault(area, 0);
+        if (left <= 0) return;
+        budget.put(area, left - 1);
         var span = entry.spans().stream().filter(s -> s.path().equals(path)).findFirst().orElse(null);
         if (span == null) return;
         try {

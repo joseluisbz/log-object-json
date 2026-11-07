@@ -87,7 +87,9 @@ public class TrioPanel extends JPanel {
     // ── Data source ────────────────────────────────────────────────────────
     private final RSyntaxTextArea  textArea;
     private final JButton          btnOpen;
-    private final JLabel           lblFile;
+    /** Title of the source box: "Log — … · file.log" (the file name lives here, not in the toolbar). */
+    private javax.swing.border.TitledBorder sourceBorder;
+    private JPanel sourceBox;
     private final FindReplacePanel sourceSearch;
 
     /**
@@ -163,6 +165,7 @@ public class TrioPanel extends JPanel {
         }
         @Override public void status(String text) { lblStatus.setText(text); }
         @Override public File proposedJsonFile() { return TrioPanel.this.proposedJsonFile(); }
+        @Override public Path patternFile() { return loadedFile; }
         @Override public void setPatternEditable(boolean editable) {
             if (sourceEditToggle != null && sourceEditToggle.isSelected() != editable) sourceEditToggle.doClick();
         }
@@ -235,9 +238,6 @@ public class TrioPanel extends JPanel {
         btnOpen = new JButton(new FolderIcon(18));
         btnOpen.setToolTipText(Messages.get("source.open.tip"));
         styleMainButton(btnOpen);
-        lblFile = new JLabel(" ");
-        lblFile.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
-        lblFile.setForeground(Color.DARK_GRAY);
 
         btnStatus.setFocusable(false);
         btnStatus.addActionListener(e -> statusClicked());
@@ -667,9 +667,9 @@ public class TrioPanel extends JPanel {
     /** Top panel: data source. */
     private JPanel sourcePanel() {
         var panel = new JPanel(new BorderLayout(0, 4));
-        panel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createTitledBorder(Messages.get("source.title")),
-                BorderFactory.createEmptyBorder(2, 6, 4, 6)));
+        sourceBorder = BorderFactory.createTitledBorder(Messages.get("source.title"));
+        sourceBox = panel;
+        panel.setBorder(BorderFactory.createCompoundBorder(sourceBorder, BorderFactory.createEmptyBorder(2, 6, 4, 6)));
 
         // Toolbar: sync | [📂] file | [›] 🔍 [find ▾] Cc W .* n of m ↑ ↓ … [wrap]
         var bar = new JToolBar();
@@ -690,7 +690,6 @@ public class TrioPanel extends JPanel {
             lblStatus.setText(Messages.get("source.copied"));
         });
         bar.add(btnCopy);
-        bar.add(lblFile);
         bar.addSeparator();
         bar.add(sourceSearch.getPanel());
         bar.add(Box.createHorizontalGlue());
@@ -822,23 +821,21 @@ public class TrioPanel extends JPanel {
         instantiate(null);     // opening a file instantiates immediately
     }
 
-    /** Shows the loaded file's name in the toolbar (fixed size so the search box does not clip it). */
+    /** Shows the loaded file's name next to the title of the source box (and of the Pattern, when comparing). */
     private void showFileName(Path path) {
-        lblFile.setText(path.getFileName().toString());
-        lblFile.setToolTipText(path.toAbsolutePath().toString());
-        lblFile.setPreferredSize(null);
-        var d = lblFile.getPreferredSize();
-        d = new Dimension(d.width + 24, d.height);
-        lblFile.setPreferredSize(d);
-        lblFile.setMinimumSize(d);
-        lblFile.setMaximumSize(d);
+        sourceBorder.setTitle(Messages.get("source.title") + (path == null ? "" : "  ·  " + path.getFileName()));
+        sourceBox.repaint();
+        sourceBox.setToolTipText(path == null ? null : path.toAbsolutePath().toString());
+        compare.updateTitles();
     }
 
-    /** What is needed to rebuild this tab (e.g. after changing the UI language). */
-    public record Snapshot(String text, Path loadedFile, String loadedText) { }
+    /** What is needed to rebuild this tab (e.g. after changing the UI language), comparison included. */
+    public record Snapshot(String text, Path loadedFile, String loadedText,
+                           boolean comparing, String sampleText, Path sampleFile) { }
 
     public Snapshot snapshot() {
-        return new Snapshot(textArea.getText(), loadedFile, loadedText);
+        return new Snapshot(textArea.getText(), loadedFile, loadedText,
+                compare.isActive(), compare.sampleArea().getText(), compare.sampleFile());
     }
 
     /** Restores a snapshot: same text and loaded file (the tree and JSON are rebuilt by the sync). */
@@ -851,6 +848,10 @@ public class TrioPanel extends JPanel {
         textArea.discardAllEdits();
         autoInstantiate.stop();
         if (!s.text().isBlank()) instantiate(null);
+        if (s.comparing()) {
+            setComparing(true);
+            compare.restoreSample(s.sampleText(), s.sampleFile());
+        }
     }
 
     /** Shared look for the main toolbar buttons. */
