@@ -38,7 +38,7 @@ public class JsonEditor extends RSyntaxTextArea {
     private static final Color BOX_BG     = new Color(232, 238, 248);
     private static final Color BOX_BORDER = new Color(160, 180, 215);
     private static final Color BOX_DOTS   = new Color(70, 100, 160);
-    private static final Icon ICON_TREE = new HoverActionMenu.GlyphIcon("⬡", new Color(45, 105, 200));
+
     private static final Icon ICON_COPY = new HoverActionMenu.GlyphIcon("⎘", new Color(120, 120, 120));
 
     /** "⋯" boxes painted in the last repaint → fold they expand. */
@@ -84,7 +84,8 @@ public class JsonEditor extends RSyntaxTextArea {
         if (path != null) {
             String text = JsonPath.format(path);
             if (locator != null) {
-                specific.add(new HoverActionMenu.Item(Messages.get("menu.locateInTree"), ICON_TREE, true, text,
+                specific.add(new HoverActionMenu.Item(Messages.get("menu.locate"), HoverActionMenu.ICON_LOCATE, true,
+                        Messages.get("menu.locate.fromJson.tip"),
                         () -> locator.accept(path)));
             }
             specific.add(new HoverActionMenu.Item(Messages.get("json.copyPath"), ICON_COPY, true, text,

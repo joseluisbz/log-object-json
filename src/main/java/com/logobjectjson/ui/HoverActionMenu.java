@@ -344,6 +344,9 @@ public class HoverActionMenu extends JComponent {
         return out;
     }
 
+    /** "Locate": the same action in the three views (tree, text, JSON), taking you to the other two. */
+    public static final Icon ICON_LOCATE = new GlyphIcon("⌖", new Color(200, 90, 30));
+
     /** Simple drawn icon: a glyph in a color (keeps the menu free of image files). */
     public record GlyphIcon(String glyph, Color color) implements Icon {
         @Override public void paintIcon(Component c, Graphics g, int x, int y) {

@@ -313,10 +313,10 @@ class FlowsSpec extends UiSpec {
         onEdt { menu().contains(10, 10) }
         onEdt { t.selectionPath.lastPathComponent.toString() }.startsWith('customer')
 
-        when: 'left click on "Locate in the text" (third option)'
+        when: 'left click on "Locate" (second option)'
         Point option = onEdt {
             def m = menu()
-            def p = new Point(30, 4 + 2 * 24 + 12)
+            def p = new Point(30, 4 + 1 * 24 + 12)
             SwingUtilities.convertPointToScreen(p, m)
             p
         }
@@ -325,8 +325,9 @@ class FlowsSpec extends UiSpec {
         robot.mouseRelease(java.awt.event.InputEvent.BUTTON1_DOWN_MASK)
         robot.waitForIdle()
 
-        then: 'the action runs and the menu closes'
+        then: 'the action runs (text and JSON) and the menu closes'
         eventually.eventually { assert onEdt { main().@textArea.selectedText } == 'customer' }
+        onEdt { main().@jsonPanel.@editor.selectedText } == '"customer"'
         menu() == null
 
         when: 'open it again and press Escape'
@@ -343,7 +344,7 @@ class FlowsSpec extends UiSpec {
         eventually.eventually { assert menu() == null }
     }
 
-    def "source text: hover over a property offers 'Locate in the tree'; right click adds editing actions"() {
+    def "source text: hover over a property offers 'Locate'; right click adds editing actions"() {
         given:
         setText(main(), LOG)
         waitInSync(main())
@@ -365,7 +366,7 @@ class FlowsSpec extends UiSpec {
 
         then: 'only the specific action, translucent'
         eventually.eventually { assert menu() != null && onEdt { menu().@state.toString() } == 'GHOST' }
-        texts() == [Messages.get('menu.locateInTree')]
+        texts() == [Messages.get('menu.locate')]
 
         when: 'right click'
         robot.mousePress(java.awt.event.InputEvent.BUTTON3_DOWN_MASK)
@@ -374,16 +375,17 @@ class FlowsSpec extends UiSpec {
 
         then: 'fixed, with the editing actions too'
         eventually.eventually { assert onEdt { menu().@state.toString() } == 'FIXED' }
-        texts() == [Messages.get('menu.locateInTree'), Messages.get('edit.undo'), Messages.get('edit.cut'),
+        texts() == [Messages.get('menu.locate'), Messages.get('edit.undo'), Messages.get('edit.cut'),
                     Messages.get('edit.copy'), Messages.get('edit.paste'), Messages.get('edit.selectAll')]
 
-        when: 'choose "Locate in the tree"'
+        when: 'choose "Locate"'
         onEdt { menu().@items[0].action().run(); menu().hideMenu() }
 
-        then:
+        then: 'tree and JSON'
         eventually.eventually {
             assert onEdt { tree(main()).selectionPath?.lastPathComponent?.toString() } == 'prod  =  "B-22/x"'
         }
+        onEdt { main().@jsonPanel.@editor.selectedText } == '"prod"'
     }
 
     def "JSON: replace becomes available when 'Editable' is checked"() {

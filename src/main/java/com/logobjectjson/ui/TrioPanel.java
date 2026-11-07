@@ -263,8 +263,7 @@ public class TrioPanel extends JPanel {
     // ─────────────────────────────────────────────────────────────────────────
 
     private static final Icon ICON_ANALYZE = new HoverActionMenu.GlyphIcon("⧉", new Color(45, 105, 200));
-    private static final Icon ICON_JSON = new HoverActionMenu.GlyphIcon("{}", new Color(30, 140, 90));
-    private static final Icon ICON_TEXT = new HoverActionMenu.GlyphIcon("¶", new Color(120, 120, 120));
+
 
     /** Tree node under p (only on the row's label/icon), or null. */
     private DefaultMutableTreeNode nodeAt(Point p) {
@@ -285,13 +284,13 @@ public class TrioPanel extends JPanel {
                 new HoverActionMenu.Item(Messages.get("menu.analyzeNode"), ICON_ANALYZE,
                         isContainer && branchOpener != null, Messages.get("menu.analyzeNode.tip"),
                         () -> extractBranch(node)),
-                new HoverActionMenu.Item(Messages.get(target != null ? "menu.locateInJson" : "menu.locateInJson.none"),
-                        ICON_JSON, target != null, null, () -> locateInJson(target, node)),
-                new HoverActionMenu.Item(Messages.get("menu.locateInText"), ICON_TEXT,
-                        instantiatedText != null, null, () -> locateInSource(node, List.of())));
+                new HoverActionMenu.Item(Messages.get("menu.locate"), HoverActionMenu.ICON_LOCATE,
+                        target != null || instantiatedText != null, Messages.get("menu.locate.fromTree.tip"),
+                        () -> {
+                            if (target != null) locateInJson(target, node);
+                            if (instantiatedText != null) locateInSource(node, List.of());
+                        }));
     }
-
-    private static final Icon ICON_TREE = new HoverActionMenu.GlyphIcon("⬡", new Color(45, 105, 200));
 
     /**
      * Source editor actions at p: "Locate in the tree" when p is over a property of
@@ -303,8 +302,8 @@ public class TrioPanel extends JPanel {
         boolean synced = currentEntries != null && textArea.getText().equals(instantiatedText);
         boolean onObject = off >= 0 && synced && currentEntries.stream().anyMatch(en -> en.contains(off));
         var locate = onObject || (fixed && off >= 0 && !synced && textArea.getDocument().getLength() > 0)
-                ? List.of(new HoverActionMenu.Item(Messages.get("menu.locateInTree"), ICON_TREE, true, null,
-                        () -> locateFromSource(off)))
+                ? List.of(new HoverActionMenu.Item(Messages.get("menu.locate"), HoverActionMenu.ICON_LOCATE, true,
+                        Messages.get("menu.locate.fromText.tip"), () -> locateFromSource(off)))
                 : List.<HoverActionMenu.Item>of();
         return fixed ? HoverActionMenu.concat(locate, HoverActionMenu.editItems(textArea)) : locate;
     }
@@ -1120,8 +1119,8 @@ public class TrioPanel extends JPanel {
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Locates in the tree the property/element at the source editor offset.
-     * If the content is not instantiated (or changed), instantiates it first.
+     * Locates the property/element at the source editor offset in the tree and
+     * in the JSON. If the content is not instantiated (or changed), instantiates it first.
      */
     private void locateFromSource(int offset) {
         if (currentEntries == null || !textArea.getText().equals(instantiatedText)) {
@@ -1135,6 +1134,12 @@ public class TrioPanel extends JPanel {
             List<Object> path = entry.pathAt(offset);
             var entryNode = (DefaultMutableTreeNode) root.getChildAt(i);
             locateInTree(entryNode, path);
+            var selected = resultTree.getSelectionPath();
+            if (selected != null) {
+                var node = (DefaultMutableTreeNode) selected.getLastPathComponent();
+                var panel = panelContaining(node);
+                if (panel != null) locateInJson(panel, node);
+            }
             resultTree.requestFocusInWindow();
             return;
         }
