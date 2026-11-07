@@ -49,6 +49,12 @@ public class JsonViewerPanel extends JPanel {
     private boolean loading;
     private final JLabel lblInfo = new JLabel(" ");
     private final ValidateIcon validateIcon = new ValidateIcon(16);
+    private JButton btnValidate;
+    private JButton btnSave;
+    /** Offset of the current syntax error (-1 = valid). */
+    private int errorOffset = -1;
+    /** Debounced live validation while editing. */
+    private final Timer liveValidation = new Timer(Config.integer("sync.delayMs"), e -> validateJson(false));
     /** Toolbars row (main toolbar + Wrap). */
     private JPanel bars;
 
@@ -102,14 +108,21 @@ public class JsonViewerPanel extends JPanel {
                 on -> lblInfo.setText(on ? Messages.get("json.editMode") : " "));
 
         // Validate: circle with ✔; turns green ✔ / red ✖ with the result
-        var btnValidate = new JButton(validateIcon);
+        // Validate: validated live while editing; a click validates now and, if invalid, goes to the error
+        btnValidate = new JButton(validateIcon);
         btnValidate.setToolTipText(Messages.get("json.validate.tip"));
         btnValidate.setFocusable(false);
-        btnValidate.addActionListener(e -> validateJson());
-        editor.getDocument().addDocumentListener(new DocumentListener() {   // edits invalidate the result
-            private void reset() { validateIcon.setState(ValidateIcon.State.NONE); btnValidate.repaint(); }
-            @Override public void insertUpdate(DocumentEvent e)  { reset(); }
-            @Override public void removeUpdate(DocumentEvent e)  { reset(); }
+        btnValidate.addActionListener(e -> validateJson(true));
+        liveValidation.setRepeats(false);
+        editor.getDocument().addDocumentListener(new DocumentListener() {
+            private void edited() {
+                if (loading) return;
+                validateIcon.setState(ValidateIcon.State.PENDING);
+                btnValidate.repaint();
+                liveValidation.restart();
+            }
+            @Override public void insertUpdate(DocumentEvent e)  { edited(); }
+            @Override public void removeUpdate(DocumentEvent e)  { edited(); }
             @Override public void changedUpdate(DocumentEvent e) { }
         });
 
@@ -129,7 +142,7 @@ public class JsonViewerPanel extends JPanel {
         bar.add(btnValidate);
         bar.add(btnCopy);
 
-        var btnSave = new JButton(new SaveIcon(16));
+        btnSave = new JButton(new SaveIcon(16));
         btnSave.setToolTipText(Messages.get("json.save.tip"));
         btnSave.addActionListener(e -> save());
         bar.add(btnSave);
@@ -158,6 +171,7 @@ public class JsonViewerPanel extends JPanel {
 
         add(bars, BorderLayout.NORTH);
         add(scroll, BorderLayout.CENTER);
+        markValid();                 // generated from the tree: valid by construction
     }
 
     /**
@@ -242,9 +256,20 @@ public class JsonViewerPanel extends JPanel {
             loading = false;
         }
         modified = false;
+        markValid();
         editor.setCaretPosition(Math.min(caret, json.length()));
         SwingUtilities.invokeLater(() -> editor.scrollRectToVisible(view));
         lblInfo.setText(Messages.get("json.updated"));
+    }
+
+    /** JSON generated from the tree is valid by construction: no need to re-parse it. */
+    private void markValid() {
+        liveValidation.stop();
+        errorOffset = -1;
+        validateIcon.setState(ValidateIcon.State.VALID);
+        btnSave.setEnabled(true);
+        btnValidate.setToolTipText(Messages.get("json.validate.tip"));
+        btnValidate.repaint();
     }
 
     /** Marks that the panel no longer reflects the source text (and why). */
@@ -271,11 +296,9 @@ public class JsonViewerPanel extends JPanel {
     private void save() {
         String json = getJson();
         String error = JsonSerializer.validate(json);
-        if (error != null) {
-            lblInfo.setText("⚠ " + error);
-            int r = JOptionPane.showConfirmDialog(this, Messages.get("json.invalid.confirm", error),
-                    Messages.get("json.invalid.title"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-            if (r != JOptionPane.YES_OPTION) return;
+        if (error != null) {                      // Save is disabled while invalid; Ctrl+S too
+            validateJson(true);
+            return;
         }
         var chooser = new JFileChooser();
         chooser.setDialogTitle(Messages.get("json.save.title"));
@@ -297,17 +320,38 @@ public class JsonViewerPanel extends JPanel {
         }
         try {
             Files.writeString(target.toPath(), json, StandardCharsets.UTF_8);
-            lblInfo.setText(Messages.get(error == null ? "json.saved.valid" : "json.saved.invalid", target.getName()));
+            lblInfo.setText(Messages.get("json.saved.valid", target.getName()));
             lblInfo.setToolTipText(target.getAbsolutePath());
         } catch (IOException ex) {
             ErrorDialog.show(this, Messages.get("json.save.error"), ex);
         }
     }
 
-    private void validateJson() {
-        String error = JsonSerializer.validate(getJson());
+    /**
+     * Validates the JSON: updates ✔/✖, enables Save only if valid and reports the error.
+     * @param goToError whether to move the caret to the error (explicit click on ✖)
+     */
+    private void validateJson(boolean goToError) {
+        liveValidation.stop();
+        String json = getJson();
+        String error = JsonSerializer.validate(json);
+        errorOffset = error == null ? -1 : JsonSerializer.errorOffset(json);
         validateIcon.setState(error == null ? ValidateIcon.State.VALID : ValidateIcon.State.INVALID);
-        repaint();
-        lblInfo.setText(error == null ? Messages.get("json.valid") : "⚠ " + error);
+        btnSave.setEnabled(error == null);
+        btnValidate.setToolTipText(error == null ? Messages.get("json.validate.tip")
+                : Messages.get("json.invalid.goTo", error));
+        btnValidate.repaint();
+        lblInfo.setText(error == null ? Messages.get("json.valid") : Messages.get("json.invalid.saveDisabled", error));
+        lblInfo.setToolTipText(error);
+        if (goToError && errorOffset >= 0) goToError();
+    }
+
+    /** Moves the caret to the syntax error, expanding folds and centering it. */
+    private void goToError() {
+        int off = Math.min(errorOffset, editor.getDocument().getLength());
+        editor.getFoldManager().ensureOffsetNotInClosedFold(off);
+        editor.requestFocusInWindow();
+        editor.select(off, Math.min(off + 1, editor.getDocument().getLength()));
+        SwingUtilities.invokeLater(() -> Centering.on(editor, off));
     }
 }

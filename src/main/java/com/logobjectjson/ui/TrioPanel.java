@@ -64,8 +64,6 @@ public class TrioPanel extends JPanel {
         void open(String title, String path, String text);
     }
 
-    private static final Color SYNC_ERROR = new Color(190, 60, 30);
-    private static final Color SYNC_OK = new Color(30, 130, 60);
     /** Max line numbers listed when the text contains several objects. */
     private static final int MAX_LISTED_LINES = 10;
     /** Inserting more than this many characters at once counts as a paste. */
@@ -92,8 +90,16 @@ public class TrioPanel extends JPanel {
     private final JLabel           lblFile;
     private final FindReplacePanel sourceSearch;
 
-    /** Text → tree/JSON sync status indicator (✔ / ⏳ / ⚠). */
-    private final JLabel lblSync;
+    /**
+     * Validation of the whole chain text → tree → JSON, live (✔ valid / … updating / ✖ problem).
+     * A click on ✖ goes to the problem in the text; on ✔ it re-validates now.
+     */
+    private final ValidateIcon statusIcon = new ValidateIcon(16);
+    private final JButton btnStatus = new JButton(statusIcon);
+    /** Headline of the current status (also used by the tests). */
+    private String syncText = " ";
+    /** Offset of the problem in the text (-1 = none). */
+    private int problemOffset = -1;
     /** Languages whose printing syntax matches the object (hint, from dialects.yml). */
     private final JLabel lblLanguage = new LanguageBadge();
 
@@ -181,9 +187,9 @@ public class TrioPanel extends JPanel {
         lblFile.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
         lblFile.setForeground(Color.DARK_GRAY);
 
-        lblSync = new JLabel(" ");
-        lblSync.setFont(UIManager.getFont("Label.font").deriveFont(Font.BOLD));
-        lblSync.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 8));
+        btnStatus.setFocusable(false);
+        btnStatus.addActionListener(e -> statusClicked());
+        status(ValidateIcon.State.NONE, " ", Messages.get("sync.empty.tip"), -1);
         autoInstantiate.setRepeats(false);
 
         tglWrap = new JToggleButton(new WrapIcon());
@@ -354,7 +360,7 @@ public class TrioPanel extends JPanel {
             showJson(panel[0]);
             lblStatus.setText(Messages.get("status.jsonGenerated", tnv.label()));
         } catch (Exception ex) {
-            showError(Messages.get("error.serialize", ex.getMessage()));
+            removeJson(Messages.get("error.serialize", ex.getMessage()));
         }
     }
 
@@ -601,7 +607,7 @@ public class TrioPanel extends JPanel {
         var bar = new JToolBar();
         bar.setFloatable(false);
         bar.setRollover(true);
-        bar.add(lblSync);
+        bar.add(btnStatus);
         bar.add(lblLanguage);
         bar.addSeparator();
         bar.add(EditToggle.create(textArea, true, Messages.get("source.editable.tip"), null));
@@ -775,11 +781,11 @@ public class TrioPanel extends JPanel {
         textArea.repaint();
         if (textArea.getDocument().getLength() == 0) {
             autoInstantiate.stop();
-            sync(" ", null);
+            status(ValidateIcon.State.NONE, " ", Messages.get("sync.empty.tip"), -1);
             return;
         }
         if (!textArea.getText().equals(instantiatedText)) {
-            sync(Messages.get("sync.updating"), Messages.get("sync.updating.tip"));
+            status(ValidateIcon.State.PENDING, Messages.get("sync.updating"), Messages.get("sync.updating.tip"), -1);
             autoInstantiate.restart();
         }
     }
@@ -790,11 +796,41 @@ public class TrioPanel extends JPanel {
         }
     }
 
-    private void sync(String text, String tip) {
-        lblLanguage.setVisible(false);          // shown again only after a successful sync
-        lblSync.setText(text);
-        lblSync.setToolTipText(tip);
-        lblSync.setForeground(text.startsWith("⚠") ? SYNC_ERROR : text.startsWith("✔") ? SYNC_OK : Color.DARK_GRAY);
+    /**
+     * Shows the chain status on the ✔/✖ button.
+     * @param offset where the problem is in the text (-1 = none)
+     */
+    private void status(ValidateIcon.State state, String headline, String detail, int offset) {
+        if (state != ValidateIcon.State.VALID) lblLanguage.setVisible(false);   // shown again after a valid sync
+        syncText = headline;
+        problemOffset = offset;
+        statusIcon.setState(state);
+        String tip = detail == null ? headline : headline + " — " + detail;
+        if (state == ValidateIcon.State.INVALID && offset >= 0) tip += "  " + Messages.get("sync.goToProblem");
+        btnStatus.setToolTipText(tip);
+        btnStatus.repaint();
+    }
+
+    /** ✖: go to the problem in the text; otherwise: validate (re-instantiate) now. */
+    private void statusClicked() {
+        if (problemOffset >= 0 && syncText.startsWith("⚠")) {
+            int off = Math.min(problemOffset, textArea.getDocument().getLength());
+            textArea.requestFocusInWindow();
+            textArea.setCaretPosition(off);
+            Centering.on(textArea, off);
+        } else if (textArea.getDocument().getLength() > 0) {
+            autoInstantiate.stop();
+            instantiate(null);
+        }
+    }
+
+    /** Problem serializing the parsed object to valid JSON, or null if it is fine. */
+    private static String serializationProblem(Object value) {
+        try {
+            return JsonSerializer.validate(JsonSerializer.toPrettyJson(value));
+        } catch (Exception ex) {
+            return String.valueOf(ex.getMessage());
+        }
     }
 
     /** Shows the languages of the recognized dialect (e.g. "Java · Kotlin") next to the sync status. */
@@ -847,7 +883,7 @@ public class TrioPanel extends JPanel {
         String content = textArea.getText();
         if (content.trim().isEmpty()) return;
 
-        sync(Messages.get("sync.updating"), null);
+        status(ValidateIcon.State.PENDING, Messages.get("sync.updating"), null, -1);
 
         // Parse on a worker thread so the EDT is not blocked
         SwingWorker<List<ParsedEntry>, Void> worker = new SwingWorker<>() {
@@ -865,8 +901,8 @@ public class TrioPanel extends JPanel {
                     if (valid.isEmpty()) {
                         // Keep the last valid version
                         instantiatedText = null;
-                        sync(Messages.get("sync.noObjects"), Messages.get(entries.isEmpty()
-                                ? "sync.noObjects.none.tip" : "sync.noObjects.error.tip"));
+                        status(ValidateIcon.State.INVALID, Messages.get("sync.noObjects"), Messages.get(entries.isEmpty()
+                                ? "sync.noObjects.none.tip" : "sync.noObjects.error.tip"), 0);
                         return;
                     }
 
@@ -874,6 +910,15 @@ public class TrioPanel extends JPanel {
                     // (grouping them in an array or under a common root would invent structure).
                     if (valid.size() > 1) {
                         showSeveralObjects(content, valid);
+                        return;
+                    }
+
+                    // The object must also serialize to valid JSON (the last link of the chain)
+                    String jsonProblem = serializationProblem(valid.get(0).parsed());
+                    if (jsonProblem != null) {
+                        instantiatedText = null;
+                        status(ValidateIcon.State.INVALID, Messages.get("sync.jsonError"), jsonProblem,
+                                Math.max(0, valid.get(0).baseOffset()));
                         return;
                     }
 
@@ -894,14 +939,14 @@ public class TrioPanel extends JPanel {
                     String dialect = valid.get(0).dialect();
                     String detail = dialect == null ? Messages.get("status.instantiated")
                             : Messages.get("status.instantiated.dialect", dialect);
-                    sync(Messages.get("sync.ok"), detail);
+                    status(ValidateIcon.State.VALID, Messages.get("sync.ok"), detail, -1);
                     showLanguages(dialect);
                     lblStatus.setText("✔  " + detail);
                 } catch (Exception ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                     cause.printStackTrace();
                     instantiatedText = null;
-                    sync(Messages.get("sync.parseError"), String.valueOf(cause));
+                    status(ValidateIcon.State.INVALID, Messages.get("sync.parseError"), String.valueOf(cause), 0);
                 }
             }
         };
@@ -932,7 +977,8 @@ public class TrioPanel extends JPanel {
         resultTree.setModel(new DefaultTreeModel(
                 new DefaultMutableTreeNode(Messages.get("tree.severalObjects", valid.size()))));
         removeJson(Messages.get("json.severalObjects", valid.size()));
-        sync(Messages.get("sync.severalObjects"), msg);
+        status(ValidateIcon.State.INVALID, Messages.get("sync.severalObjects"), msg,
+                Math.max(0, valid.get(0).baseOffset()));
         lblStatus.setText("⚠  " + msg);
     }
 

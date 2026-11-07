@@ -488,6 +488,59 @@ class FlowsSpec extends UiSpec {
         }
     }
 
+    def "JSON: live validation; Save disabled while invalid; clicking ✖ goes to the error"() {
+        given:
+        setText(main(), LOG)
+        waitInSync(main())
+        def panel = onEdt { main().@jsonPanel }
+        def editor = onEdt { panel.@editor }
+        int comma = onEdt { editor.text.indexOf(',') }
+
+        when: 'turn editing on and insert a second comma'
+        onEdt {
+            findAll(panel, JToggleButton).find { it.toolTipText == Messages.get('json.editable.tip') }.doClick()
+            editor.insert(',', comma)
+        }
+
+        then: 'validated by itself: ✖, Save disabled'
+        eventually.eventually { assert onEdt { panel.@validateIcon.@state.toString() } == 'INVALID' }
+        !onEdt { panel.@btnSave.enabled }
+
+        when: 'click ✖'
+        onEdt { panel.@btnValidate.doClick() }
+
+        then: 'the caret goes to the error (the extra comma)'
+        onEdt { editor.selectionStart } == comma + 1
+
+        when: 'fix it'
+        onEdt { editor.select(comma, comma + 1); editor.replaceSelection('') }
+
+        then:
+        eventually.eventually { assert onEdt { panel.@validateIcon.@state.toString() } == 'VALID' }
+        onEdt { panel.@btnSave.enabled }
+    }
+
+    def "source: the ✔/✖ validates the whole chain; ✖ goes to the problem in the text"() {
+        when:
+        setText(main(), ['header', 'A(x=1)', 'noise', 'B(y=2)'].join('\n'))
+
+        then:
+        eventually.eventually { assert onEdt { main().@statusIcon.@state.toString() } == 'INVALID' }
+
+        when:
+        onEdt { main().@btnStatus.doClick() }
+
+        then: 'caret at the first object'
+        onEdt { main().@textArea.caretPosition } == 'header'.length() + 1
+
+        when:
+        setText(main(), LOG)
+
+        then:
+        waitInSync(main())
+        onEdt { main().@statusIcon.@state.toString() } == 'VALID'
+    }
+
     def "tree search has the editors' options: Cc, W, .*, 'No results' and history"() {
         given:
         setText(main(), LOG)

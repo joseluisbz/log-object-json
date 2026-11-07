@@ -38,6 +38,21 @@ public final class JsonSerializer {
         }
     }
 
+    /** Character offset of the first syntax error, or -1 if the JSON is valid. */
+    public static int errorOffset(String json) {
+        try {
+            MAPPER.readTree(json);
+            return -1;
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            var loc = ex.getLocation();
+            if (loc == null) return 0;
+            if (loc.getCharOffset() >= 0) return (int) Math.min(loc.getCharOffset(), json.length());
+            int line = 1, i = 0;
+            while (i < json.length() && line < loc.getLineNr()) if (json.charAt(i++) == '\n') line++;
+            return Math.min(json.length(), i + Math.max(0, loc.getColumnNr() - 1));
+        }
+    }
+
     private static String locationOf(com.fasterxml.jackson.core.JsonProcessingException ex) {
         var loc = ex.getLocation();
         return loc == null ? "" : " " + com.logobjectjson.Messages.get("json.location", loc.getLineNr(), loc.getColumnNr());

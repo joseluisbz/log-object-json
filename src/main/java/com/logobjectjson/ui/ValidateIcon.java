@@ -6,11 +6,11 @@ import java.awt.*;
 /**
  * Drawn "Validate" icon: a circle with a check mark. It also shows the result
  * of the last validation (shape AND color, not color alone):
- * neutral ✔ (not validated yet), green ✔ (valid), red ✖ (invalid).
+ * neutral ✔ (not validated yet), neutral … (validating), green ✔ (valid), red ✖ (invalid).
  */
 public class ValidateIcon implements Icon {
 
-    public enum State { NONE, VALID, INVALID }
+    public enum State { NONE, PENDING, VALID, INVALID }
 
     private static final Color NEUTRAL = new Color(70, 90, 120);
     private static final Color VALID = new Color(30, 140, 70);
@@ -35,7 +35,7 @@ public class ValidateIcon implements Icon {
         g2.translate(x, y);
         boolean enabled = c == null || c.isEnabled();
         Color color = !enabled ? GRAY : switch (state) {
-            case NONE -> NEUTRAL;
+            case NONE, PENDING -> NEUTRAL;
             case VALID -> VALID;
             case INVALID -> INVALID;
         };
@@ -44,7 +44,12 @@ public class ValidateIcon implements Icon {
         g2.setStroke(new BasicStroke(1.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         g2.drawOval(1, 1, size - 3, size - 3);
         g2.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        if (state == State.INVALID && enabled) {
+        if (state == State.PENDING && enabled) {
+            for (int i = 0; i < 3; i++) {
+                int d = Math.max(2, Math.round(s * 0.12f));
+                g2.fillOval(Math.round(s * (0.26f + i * 0.18f)), Math.round(s * 0.46f), d, d);
+            }
+        } else if (state == State.INVALID && enabled) {
             g2.drawLine(Math.round(s * 0.34f), Math.round(s * 0.34f), Math.round(s * 0.62f), Math.round(s * 0.62f));
             g2.drawLine(Math.round(s * 0.62f), Math.round(s * 0.34f), Math.round(s * 0.34f), Math.round(s * 0.62f));
         } else {

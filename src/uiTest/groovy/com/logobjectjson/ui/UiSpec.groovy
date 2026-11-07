@@ -62,7 +62,7 @@ abstract class UiSpec extends Specification {
 
     static String json(TrioPanel t) { onEdt { t.@jsonPanel?.json } }
 
-    static String sync(TrioPanel t) { onEdt { t.@lblSync.text } }
+    static String sync(TrioPanel t) { onEdt { t.@syncText } }
 
     static JTree tree(TrioPanel t) { t.@resultTree }
 
