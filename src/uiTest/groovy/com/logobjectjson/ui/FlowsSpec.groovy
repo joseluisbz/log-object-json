@@ -758,10 +758,46 @@ class FlowsSpec extends UiSpec {
         !onEdt { toggle.selected }
     }
 
-    def "search arrows are compact (↑ ↓ next to each other)"() {
+    def "compare JSON views: each view shows its toolbar (with and without a Sample)"() {
+        given:
+        setText(main(), 'P INFO Order(id=7)')
+        waitInSync(main())
+        onEdt { findAll(trios().getTabComponentAt(0) as Container, JToggleButton)[0].doClick() }
+        def ctl = onEdt { main().@compare }
+        def View = ctl.class.classLoader.loadClass('com.logobjectjson.ui.CompareController$View')
+
+        when: 'Sample view without a sample'
+        onEdt { ctl.showView(Enum.valueOf(View, 'SAMPLE')) }
+
+        then:
+        onEdt { findAll(ctl.@jsonPanel, JToolBar).findAll { it.showing }.size() } >= 2
+        onEdt { findAll(ctl.@sampleJson, JToolBar).every { it.showing } }
+
+        when: 'with a sample, Sample view again'
+        onEdt { ctl.setSampleText('S INFO Order(id=8)') }
+        eventually.eventually { assert onEdt { ctl.lastDiff() } != null }
+        onEdt { ctl.showView(Enum.valueOf(View, 'SAMPLE')) }
+
+        then:
+        onEdt { findAll(ctl.@sampleJson, JToolBar).every { it.showing } }
+        onEdt { ctl.@sampleJson.json }.contains('"id": 8')
+    }
+
+    def "search arrows are compact (↑ ↓ next to each other) and not truncated; 'No results' icon also when disabled"() {
         expect:
         onEdt {
-            findAll(main(), JButton).findAll { it.text in ['↑', '↓'] }.every { it.preferredSize.width <= 24 }
+            def lbl = findAll(main().@placeholderJson, JLabel).find { it.toolTipText == Messages.get('search.noResults') }
+            lbl != null && lbl.disabledIcon != null
+        }
+        and:
+        onEdt {
+            def arrows = findAll(main(), JButton).findAll { it.text in ['↑', '↓'] }
+            !arrows.isEmpty() && arrows.every { b ->
+                def fm = b.getFontMetrics(b.font)
+                def in = b.insets
+                b.preferredSize.width <= 28 &&                                            // compact
+                        b.width >= fm.stringWidth(b.text) + in.left + in.right             // and not truncated ("…")
+            }
         }
     }
 

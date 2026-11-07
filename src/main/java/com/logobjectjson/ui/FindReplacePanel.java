@@ -396,7 +396,9 @@ public class FindReplacePanel {
     /** "No results" is shown as an icon (with the text as tooltip); counts like "3 of 12" as text. */
     static void showStatus(JLabel label, String text, boolean error) {
         boolean none = text.equals(Messages.get("search.noResults"));
-        label.setIcon(none ? new NoResultsIcon(error) : null);
+        var icon = none ? new NoResultsIcon(error) : null;
+        label.setIcon(icon);
+        label.setDisabledIcon(icon);       // drawn icons are not painted on disabled labels otherwise
         label.setText(none ? "" : text);
         label.setToolTipText(none ? text : null);
     }
@@ -673,7 +675,9 @@ public class FindReplacePanel {
                     var d = super.getPreferredSize();
                     String t = getText();
                     if (getIcon() == null && t != null && !t.isEmpty() && t.length() <= 2) {
-                        d = new Dimension(Math.min(d.width, getFontMetrics(getFont()).stringWidth(t) + 12), d.height);
+                        var in = getInsets();   // margin + border: the text must fit, or it shows as "…"
+                        int w = getFontMetrics(getFont()).stringWidth(t) + in.left + in.right + 4;
+                        d = new Dimension(Math.min(d.width, w), d.height);
                     }
                     return d;
                 }
