@@ -505,18 +505,15 @@ public class TrioPanel extends JPanel {
     // ─────────────────────────────────────────────────────────────────────────
 
     /** Searches the labels of every node (even collapsed ones). */
-    private String searchTree(String text, boolean forward, boolean fromStart, boolean matchCase) {
-        if (text.isEmpty()) return "";
+    private String searchTree(java.util.regex.Pattern pattern, boolean forward, boolean fromStart) {
         var treeRoot = (DefaultMutableTreeNode) resultTree.getModel().getRoot();
-        String q = matchCase ? text : text.toLowerCase();
 
         var hits = new ArrayList<DefaultMutableTreeNode>();
         for (var en = treeRoot.preorderEnumeration(); en.hasMoreElements(); ) {
             var n = (DefaultMutableTreeNode) en.nextElement();
-            String label = String.valueOf(n.getUserObject());
-            if ((matchCase ? label : label.toLowerCase()).contains(q)) hits.add(n);
+            if (pattern.matcher(String.valueOf(n.getUserObject())).find()) hits.add(n);
         }
-        if (hits.isEmpty()) return Messages.get("treeSearch.none");
+        if (hits.isEmpty()) return null;
 
         int current = -1;
         var sel = resultTree.getSelectionPath();

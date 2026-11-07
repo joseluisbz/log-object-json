@@ -265,11 +265,15 @@ public class FindReplacePanel {
 
     /** Pattern according to the options; null if the regex is invalid. */
     private Pattern pattern() {
-        String q = findText();
-        String p = tglRegex.isSelected() ? q : Pattern.quote(q);
-        if (tglWord.isSelected()) p = "(?<![\\p{L}\\p{N}_])(?:" + p + ")(?![\\p{L}\\p{N}_])";
+        return buildPattern(findText(), tglCase.isSelected(), tglWord.isSelected(), tglRegex.isSelected());
+    }
+
+    /** Search pattern for the Cc / W / .* options (shared with the tree search); null if the regex is invalid. */
+    static Pattern buildPattern(String q, boolean matchCase, boolean wholeWord, boolean regex) {
+        String p = regex ? q : Pattern.quote(q);
+        if (wholeWord) p ="(?<![\\p{L}\\p{N}_])(?:" + p + ")(?![\\p{L}\\p{N}_])";
         int flags = Pattern.MULTILINE;
-        if (!tglCase.isSelected()) flags |= Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
+        if (!matchCase) flags |=Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
         try {
             return Pattern.compile(p, flags);
         } catch (PatternSyntaxException ex) {
@@ -455,7 +459,7 @@ public class FindReplacePanel {
     // Persistent history
     // ─────────────────────────────────────────────────────────────────────
 
-    private static List<String> loadHistory(String key) {
+    static List<String> loadHistory(String key) {
         String raw = PREFS.get(key, "");
         var out = new ArrayList<String>();
         if (!raw.isEmpty()) {
@@ -465,7 +469,7 @@ public class FindReplacePanel {
     }
 
     /** Puts the text at the top of the history (no duplicates) and persists it. */
-    private static void saveHistory(String key, String text) {
+    static void saveHistory(String key, String text) {
         if (text == null || text.isEmpty()) return;
         var list = loadHistory(key);       // reload: other tabs may have added entries
         list.remove(text);
@@ -698,7 +702,7 @@ public class FindReplacePanel {
     // Drawn magnifier icon with ▾ (opens the history)
     // ─────────────────────────────────────────────────────────────────────
 
-    private static final class HistoryMagnifierIcon implements Icon {
+    static final class HistoryMagnifierIcon implements Icon {
         @Override public void paintIcon(Component c, Graphics g, int x, int y) {
             var g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);

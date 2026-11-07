@@ -48,6 +48,7 @@ public class JsonViewerPanel extends JPanel {
     /** true while the text is set from code (does not count as a user edit). */
     private boolean loading;
     private final JLabel lblInfo = new JLabel(" ");
+    private final ValidateIcon validateIcon = new ValidateIcon(16);
     /** Toolbars row (main toolbar + Wrap). */
     private JPanel bars;
 
@@ -96,14 +97,26 @@ public class JsonViewerPanel extends JPanel {
         rowHeader.add(foldGutter, BorderLayout.EAST);
         scroll.setRowHeaderView(rowHeader);
 
-        var chkEditable = new JCheckBox(Messages.get("json.editable"));
-        chkEditable.addActionListener(e -> {
-            editor.setEditable(chkEditable.isSelected());
-            lblInfo.setText(chkEditable.isSelected() ? Messages.get("json.editMode") : " ");
+        // Editable: pencil toggle (highlighted while editing is allowed)
+        var tglEditable = new JToggleButton(new EditIcon(16));
+        tglEditable.setToolTipText(Messages.get("json.editable.tip"));
+        tglEditable.setFocusable(false);
+        tglEditable.addActionListener(e -> {
+            editor.setEditable(tglEditable.isSelected());
+            lblInfo.setText(tglEditable.isSelected() ? Messages.get("json.editMode") : " ");
         });
 
-        var btnValidate = new JButton(Messages.get("json.validate"));
+        // Validate: circle with ✔; turns green ✔ / red ✖ with the result
+        var btnValidate = new JButton(validateIcon);
+        btnValidate.setToolTipText(Messages.get("json.validate.tip"));
+        btnValidate.setFocusable(false);
         btnValidate.addActionListener(e -> validateJson());
+        editor.getDocument().addDocumentListener(new DocumentListener() {   // edits invalidate the result
+            private void reset() { validateIcon.setState(ValidateIcon.State.NONE); btnValidate.repaint(); }
+            @Override public void insertUpdate(DocumentEvent e)  { reset(); }
+            @Override public void removeUpdate(DocumentEvent e)  { reset(); }
+            @Override public void changedUpdate(DocumentEvent e) { }
+        });
 
         var btnCopy = new JButton(new CopyIcon(16));
         btnCopy.setToolTipText(Messages.get("json.copy.tip"));
@@ -112,11 +125,11 @@ public class JsonViewerPanel extends JPanel {
         // Find/Replace (Ctrl+F / Ctrl+H); replace only in Editable mode
         var findReplace = new FindReplacePanel(editor);
 
-        // One toolbar: [Editable] | [Validate] [Copy] [Save] | search | info
+        // One toolbar: [✎] | [✔] [Copy] [Save] | search | info
         var bar = new JToolBar();
         bar.setFloatable(false);
         bar.setRollover(true);
-        bar.add(chkEditable);
+        bar.add(tglEditable);
         bar.addSeparator();
         bar.add(btnValidate);
         bar.add(btnCopy);
@@ -298,6 +311,8 @@ public class JsonViewerPanel extends JPanel {
 
     private void validateJson() {
         String error = JsonSerializer.validate(getJson());
+        validateIcon.setState(error == null ? ValidateIcon.State.VALID : ValidateIcon.State.INVALID);
+        repaint();
         lblInfo.setText(error == null ? Messages.get("json.valid") : "⚠ " + error);
     }
 }

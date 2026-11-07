@@ -415,12 +415,12 @@ class FlowsSpec extends UiSpec {
         onEdt { main().@jsonPanel.@editor.selectedText } == '"prod"'
     }
 
-    def "JSON: replace becomes available when 'Editable' is checked"() {
+    def "JSON: replace becomes available when editing (pencil) is turned on"() {
         given:
         setText(main(), LOG)
         waitInSync(main())
         def panel = onEdt { main().@jsonPanel }
-        def chk = onEdt { findAll(panel, JCheckBox).find { it.text == Messages.get('json.editable') } }
+        def chk = onEdt { findAll(panel, JToggleButton).find { it.toolTipText == Messages.get('json.editable.tip') } }
         def fr = onEdt { findAll(panel, JComponent).find { it.getClass().name.endsWith('FlatButton') && it.text == '›' } }
 
         expect:
@@ -452,6 +452,39 @@ class FlowsSpec extends UiSpec {
             if (k instanceof Container) out.addAll(findAll(k, type))
         }
         out
+    }
+
+    def "tree search has the editors' options: Cc, W, .*, 'No results' and history"() {
+        given:
+        setText(main(), LOG)
+        waitInSync(main())
+        def bar = onEdt { findAll(main(), TreeSearchBar)[0] }
+
+        expect:
+        onEdt { bar.@lblStatus.text } == Messages.get('search.noResults')
+
+        when: 'regex + whole word'
+        onEdt {
+            bar.@tglRegex.selected = true
+            bar.@tglWord.selected = true
+            bar.@txt.text = 'qty|prod'
+        }
+
+        then:
+        eventually.eventually { assert onEdt { bar.@lblStatus.text } == '1 / 4' }
+        onEdt { tree(main()).selectionPath.lastPathComponent.toString() }.startsWith('prod')
+
+        when: 'Enter keeps it in the history'
+        onEdt { bar.navigate(true) }
+
+        then:
+        FindReplacePanel.loadHistory('history.tree')[0] == 'qty|prod'
+
+        when: 'nothing matches'
+        onEdt { bar.@txt.text = 'zzz-none' }
+
+        then:
+        eventually.eventually { assert onEdt { bar.@lblStatus.text } == Messages.get('search.noResults') }
     }
 
     def "stress: with a ~250,000 character line the UI keeps responding"() {
