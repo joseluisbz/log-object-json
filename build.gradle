@@ -57,6 +57,7 @@ tasks.withType(Test).configureEach {
     useJUnitPlatform()
     maxHeapSize = '1g'          // the JVM defaults to 1/4 of RAM; stress tests need headroom
     systemProperty 'file.encoding', 'UTF-8'
+    systemProperty 'lojson.language', 'en'      // tests do not depend on (nor change) the user's UI language
     testLogging {
         events 'passed', 'skipped', 'failed'
         exceptionFormat 'full'

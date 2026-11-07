@@ -222,7 +222,7 @@ class FlowsSpec extends UiSpec {
 
         then:
         onEdt { trios().tabCount } == 1
-        onEdt { trios().getTabComponentAt(0) } == null       // Root has no ✕
+        onEdt { findAll(trios().getTabComponentAt(0) as Container, JButton).every { it.text != '✕' } }   // Root cannot be closed (only ⇄)
     }
 
     def "independent sessions; closing the last one leaves a new empty one"() {
@@ -621,6 +621,52 @@ class FlowsSpec extends UiSpec {
         java.awt.Toolkit.defaultToolkit.systemClipboard.getData(java.awt.datatransfer.DataFlavor.stringFlavor) == LOG
         onEdt { findAll(main().@jsonPanel, AbstractButton).every { !(it.icon instanceof WrapIcon) } }
         onEdt { findAll(main().@jsonPanel, JToolBar).size() } == 1          // a single toolbar: no extra Wrap bar
+    }
+
+    def "compare: ⇄ splits Root into Pattern and Sample; tree, texts and JSON show the differences"() {
+        given:
+        setText(main(), 'P INFO Order(id=7, customer=Ann, active=true, lines=[A, B])')
+        waitInSync(main())
+        def header = onEdt { trios().getTabComponentAt(0) as JPanel }
+        def toggle = onEdt { findAll(header, JToggleButton)[0] }
+
+        when: 'turn the comparison on'
+        onEdt { toggle.doClick() }
+        def ctl = onEdt { main().@compare }
+
+        then: 'the Pattern is locked and a Sample editor is shown'
+        onEdt { main().isComparing() }
+        !onEdt { main().@textArea.editable }
+        onEdt { ctl.sampleArea().showing }
+
+        when: 'a sample with one missing, one extra, one type and one value difference'
+        onEdt { ctl.setSampleText('S INFO Order(id=8, active="yes", lines=[A, B], note=x)') }
+
+        then: 'the tree shows them with their symbols'
+        eventually.eventually {
+            def labels = onEdt { tree(main()).model.root.preorderEnumeration().collect { it.toString() } }
+            assert labels.any { it.startsWith('~ id') }
+            assert labels.any { it.startsWith('− customer') }
+            assert labels.any { it.startsWith('≠ active') }
+            assert labels.any { it.startsWith('+ note') }
+        }
+
+        and: 'highlights in both texts (missing only in the Pattern, extra only in the Sample)'
+        onEdt { main().@textArea.highlighter.highlights.size() } >= 3
+        onEdt { ctl.sampleArea().highlighter.highlights.size() } >= 3
+
+        and: 'the comparison JSON contains the union (with the missing customer)'
+        onEdt { ctl.mergedEditor().text }.contains('"customer"')
+        onEdt { ctl.mergedEditor().text }.contains('"note"')
+
+        when: 'turn it off'
+        onEdt { toggle.doClick() }
+
+        then: 'back to the normal Root'
+        !onEdt { main().isComparing() }
+        onEdt { main().@textArea.editable }
+        onEdt { tree(main()).model.root.preorderEnumeration().any { it.toString().startsWith('Order') } }
+        json(main()) != null
     }
 
     def "tree search has the editors' options: Cc, W, .*, 'No results' and history"() {

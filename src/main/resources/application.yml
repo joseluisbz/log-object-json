@@ -56,3 +56,11 @@ i18n:                      # UI languages (selector with flags at the top right)
     pt: pt
     de: de
     it: it
+
+compare:                   # comparison Pattern vs Sample (⇄ on the Root tab)
+  highlightAlpha: 70       # opacity (0..255) of the highlights in the texts and the JSON
+  colors:
+    missing: "#C8281E"     # − in the Pattern, not in the Sample
+    extra: "#1E8C46"       # + in the Sample, not in the Pattern
+    type: "#1E5AC8"        # ≠ different type
+    value: "#7A7A7A"       # ~ different value

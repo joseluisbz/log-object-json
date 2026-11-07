@@ -66,7 +66,7 @@ class ConfigSpec extends Specification {
                 (f.text =~ /error\([^,]+,\s*"(lint\.[^"]+)"|"(lint\.[^"]+)"/).each { used << (it[1] ?: it[2]) }
             }
         }
-        used.unique()
+        used.unique().findAll { !it.endsWith('.') }       // "prefix." + suffix keys are checked by the file test
     }
 
     def "every message key the code uses exists in every language"() {

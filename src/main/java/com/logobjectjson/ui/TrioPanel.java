@@ -130,6 +130,54 @@ public class TrioPanel extends JPanel {
     /** Root of the last result. */
     private DefaultMutableTreeNode root;
 
+    // ── Comparison (⇄ on the Root tab) ─────────────────────────────────────
+    /** Holds the source editor; in comparison mode, the Pattern | Sample split instead. */
+    private final JPanel sourceHolder = new JPanel(new BorderLayout());
+    private JToggleButton sourceEditToggle;
+    private final CompareController compare = new CompareController(new CompareController.Host() {
+        @Override public RSyntaxTextArea patternArea() { return textArea; }
+        @Override public JTree tree() { return resultTree; }
+        @Override public ParsedEntry patternEntry() {
+            return currentEntries != null && currentEntries.size() == 1 && textArea.getText().equals(instantiatedText)
+                    ? currentEntries.get(0) : null;
+        }
+        @Override public void showSource(JComponent replacement) {
+            sourceHolder.removeAll();
+            sourceHolder.add(replacement != null ? replacement : sourceView, BorderLayout.CENTER);
+            sourceHolder.revalidate();
+            sourceHolder.repaint();
+        }
+        @Override public void showJson(JComponent replacement) {
+            var cards = (CardLayout) jsonArea.getLayout();
+            if (replacement != null) {
+                if (replacement.getParent() != jsonArea) jsonArea.add(replacement, "compare");
+                cards.show(jsonArea, "compare");
+            } else {
+                cards.show(jsonArea, jsonPanel != null ? "json" : "empty");
+            }
+            jsonArea.revalidate();
+        }
+        @Override public void restoreTree() {
+            resultTree.setModel(new DefaultTreeModel(root != null ? root : new DefaultMutableTreeNode(Messages.get("tree.empty"))));
+            expandFirstLevels(INITIAL_EXPANDED_LEVELS);
+        }
+        @Override public void status(String text) { lblStatus.setText(text); }
+        @Override public File proposedJsonFile() { return TrioPanel.this.proposedJsonFile(); }
+        @Override public void setPatternEditable(boolean editable) {
+            if (sourceEditToggle != null && sourceEditToggle.isSelected() != editable) sourceEditToggle.doClick();
+        }
+    });
+
+    /** Turns the comparison mode on/off (⇄ on the Root tab). */
+    public void setComparing(boolean on) {
+        if (on) compare.enter(sourceView);
+        else compare.leave();
+    }
+
+    public boolean isComparing() {
+        return compare.isActive();
+    }
+
     /** Entries and text of the last instantiation (to locate text → node). */
     private List<ParsedEntry> currentEntries;
     private String instantiatedText;
@@ -214,6 +262,16 @@ public class TrioPanel extends JPanel {
                 Object uo = ((DefaultMutableTreeNode) value).getUserObject();
                 setToolTipText(uo instanceof TreeNodeValue t ? t.tooltip() : null);
                 if (uo instanceof TreeNodeValue t) setIcon(TreeIcons.forValue(t.value()));
+                if (uo instanceof CompareController.DiffTreeValue d) {
+                    setIcon(TreeIcons.forValue(d.value()));
+                    setToolTipText(d.tooltip());
+                    var c = CompareController.colorOf(d.status());
+                    if (c != null && !sel) setForeground(c);
+                    setFont(tree.getFont().deriveFont(d.status() != com.logobjectjson.compare.ObjectDiff.Status.SAME || d.inside() > 0
+                            ? Font.BOLD : Font.PLAIN));
+                } else {
+                    setFont(tree.getFont());
+                }
                 return this;
             }
         });
@@ -287,6 +345,11 @@ public class TrioPanel extends JPanel {
 
     /** Actions available on the node under p (empty if there is no node). */
     private List<HoverActionMenu.Item> nodeActionsAt(Point p) {
+        if (compare.isActive()) {
+            int row = resultTree.getRowForLocation(p.x, p.y);
+            return row < 0 ? List.of()
+                    : compare.actionsFor((DefaultMutableTreeNode) resultTree.getPathForRow(row).getLastPathComponent());
+        }
         var node = nodeAt(p);
         if (node == null) return List.of();
         Object v = ((TreeNodeValue) node.getUserObject()).value();
@@ -615,7 +678,8 @@ public class TrioPanel extends JPanel {
         bar.add(btnStatus);
         bar.add(lblLanguage);
         bar.addSeparator();
-        bar.add(EditToggle.create(textArea, true, Messages.get("source.editable.tip"), null));
+        sourceEditToggle = EditToggle.create(textArea, true, Messages.get("source.editable.tip"), null);
+        bar.add(sourceEditToggle);
         bar.add(btnOpen);
         var btnCopy = new JButton(new CopyIcon(16));
         btnCopy.setToolTipText(Messages.get("source.copy.tip"));
@@ -640,7 +704,8 @@ public class TrioPanel extends JPanel {
         sourceView = new ProblemsView(textArea, scroll,
                 text -> text.equals(sourceProblemsText) ? sourceProblems : List.of(), null);
         panel.add(bar, BorderLayout.NORTH);
-        panel.add(sourceView, BorderLayout.CENTER);
+        sourceHolder.add(sourceView, BorderLayout.CENTER);
+        panel.add(sourceHolder, BorderLayout.CENTER);
         return panel;
     }
 
@@ -846,6 +911,9 @@ public class TrioPanel extends JPanel {
     /** Same, with the problems to list/underline in the source text. */
     private void status(ValidateIcon.State state, String headline, String detail, int offset,
                         List<com.logobjectjson.validation.Problem> problems) {
+        if (state != ValidateIcon.State.PENDING && compare.isActive()) {
+            SwingUtilities.invokeLater(compare::recompute);   // after the sync finished updating tree/JSON
+        }
         if (state != ValidateIcon.State.PENDING) {
             sourceProblems = List.copyOf(problems);
             sourceProblemsText = textArea.getText();

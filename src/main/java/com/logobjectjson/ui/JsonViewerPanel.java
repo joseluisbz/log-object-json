@@ -292,13 +292,20 @@ public class JsonViewerPanel extends JPanel {
             validateNow();
             return;
         }
+        saveToFile(this, Messages.get("json.save.title"), json, proposedFile.get(), this::info);
+    }
+
+    /**
+     * Asks for a .json file (proposing one), confirms overwriting and writes the JSON.
+     * Shared by this panel and the comparison (Save Pattern / Save Sample).
+     */
+    static void saveToFile(Component parent, String title, String json, File proposal, Consumer<String> info) {
         var chooser = new JFileChooser();
-        chooser.setDialogTitle(Messages.get("json.save.title"));
+        chooser.setDialogTitle(title);
         chooser.setFileFilter(new FileNameExtensionFilter(Messages.get("json.save.filter"), "json"));
-        var proposal = proposedFile.get();
         if (proposal.getParentFile() != null) chooser.setCurrentDirectory(proposal.getParentFile());
         chooser.setSelectedFile(proposal);
-        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        if (chooser.showSaveDialog(parent) != JFileChooser.APPROVE_OPTION) return;
 
         var target = chooser.getSelectedFile();
         String ext = Config.string("json.extension");
@@ -306,15 +313,15 @@ public class JsonViewerPanel extends JPanel {
             target = new File(target.getParentFile(), target.getName() + ext);
         }
         if (target.exists()) {
-            int r = JOptionPane.showConfirmDialog(this, Messages.get("json.save.exists", target.getName()),
-                    Messages.get("json.save.title"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+            int r = JOptionPane.showConfirmDialog(parent, Messages.get("json.save.exists", target.getName()),
+                    title, JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
             if (r != JOptionPane.YES_OPTION) return;
         }
         try {
             Files.writeString(target.toPath(), json, StandardCharsets.UTF_8);
-            info(Messages.get("json.saved.valid", target.getAbsolutePath()));
+            info.accept(Messages.get("json.saved.valid", target.getAbsolutePath()));
         } catch (IOException ex) {
-            ErrorDialog.show(this, Messages.get("json.save.error"), ex);
+            ErrorDialog.show(parent, Messages.get("json.save.error"), ex);
         }
     }
 

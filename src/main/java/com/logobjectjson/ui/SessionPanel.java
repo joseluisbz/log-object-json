@@ -33,7 +33,28 @@ public class SessionPanel extends JPanel {
         main = new TrioPanel(onTitleChange, this::openBranch);
 
         trios.addTab(Messages.get("trio.root"), TreeIcons.OBJECT, main, Messages.get("trio.root.tip"));
+        trios.setTabComponentAt(0, rootHeader());
         add(trios, BorderLayout.CENTER);
+    }
+
+    /**
+     * Root tab header: "⬡ Root  ⇄". The ⇄ button (raised on hover, pressed while
+     * comparing) turns the comparison mode on and off.
+     */
+    private JComponent rootHeader() {
+        var panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        panel.setOpaque(false);
+        // CAREFUL: no tooltip on the label (it would capture the clicks and the tab could not be selected)
+        var title = new JLabel(Messages.get("trio.root"), TreeIcons.OBJECT, SwingConstants.LEFT);
+        var compare = FindReplacePanel.FlatButton.toggle("⇄", Messages.get("compare.toggle.tip"));
+        compare.setMargin(new Insets(0, 4, 0, 4));
+        compare.addActionListener(e -> {
+            main.setComparing(compare.isSelected());
+            trios.setSelectedComponent(main);
+        });
+        panel.add(title);
+        panel.add(compare);
+        return panel;
     }
 
     /** The Root trio (loaded or pasted text). */

@@ -25,13 +25,15 @@ public final class Messages {
     private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
     private static final Preferences PREFS = Preferences.userNodeForPackage(Messages.class);
     private static final String PREF_LANGUAGE = "language";
+    /** -Dlojson.language=xx fixes the language without touching the user's saved preference (e.g. tests). */
+    private static final String FORCED = System.getProperty("lojson.language");
 
     private static volatile String language;
     private static volatile Map<String, String> texts;
     private static volatile Map<String, String> fallback;
 
     static {
-        load(PREFS.get(PREF_LANGUAGE, defaultLanguage()));
+        load(FORCED != null ? FORCED : PREFS.get(PREF_LANGUAGE, defaultLanguage()));
     }
 
     private Messages() { }
@@ -54,7 +56,7 @@ public final class Messages {
     /** Changes (and remembers) the language; the UI must be rebuilt to show it. */
     public static void setLanguage(String lang) {
         load(lang);
-        PREFS.put(PREF_LANGUAGE, language);
+        if (FORCED == null) PREFS.put(PREF_LANGUAGE, language);
     }
 
     /** A text in a given language (e.g. each language's own name for the selector). */
