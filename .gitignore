@@ -1,0 +1,14 @@
+# Gradle
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+bin/
+out/
+
+# Logs (may contain real data) and heap dumps
+*.log
+*.hprof

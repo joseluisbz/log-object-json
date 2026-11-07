@@ -1,0 +1,43 @@
+# Valores por defecto de la aplicación.
+# Para cambiarlos sin recompilar, copie este archivo a:
+#   ~/.parser-dinamico/application.yml   o   ./application.yml
+# o use -Dparser.<clave.con.puntos>=valor al lanzar la aplicación
+#   (p. ej. -Dparser.sincronizacion.esperaMs=900).
+
+sincronizacion:
+  esperaMs: 600            # ms tras la última tecla antes de re-instanciar
+  maxPestanasAuto: 5       # (reservado) máximo de serializaciones automáticas
+
+json:
+  nombrePorDefecto: Serializacion.json   # cuando el texto no viene intacto de un archivo
+  extension: .json
+
+dialectos:
+  recurso: dialectos.yml   # dialectos por defecto (dentro de la aplicación): java, csharp, python, rust…
+  archivo: dialectos.yml   # archivo propio que agrega/reemplaza dialectos: nombre (buscado en
+                           # ~/.parser-dinamico/ y ./) o ruta absoluta
+
+extractor:
+  maxCandidatos: 32        # máximo de puntos de inicio probados por línea para hallar el objeto
+  pilaMb: 256              # pila del hilo de parseo (MB): admite anidamientos muy profundos
+
+editor:
+  maxLineaAjuste: 20000    # largo de línea a partir del cual no se permite Wrap
+  # Texto de ejemplo (placeholder) que se muestra en gris mientras la fuente está vacía. Vacío = sin sugerencia.
+  sugerencia: |
+    Pegue aquí líneas de log que contengan objetos impresos (o abra un archivo con 📂). Por ejemplo:
+
+    2026-01-01 12:00:00 INFO [main] Servicio: Persona(nombre=Ana, edad=30, dir=Direccion(calle=Sol, numero=5))
+    2026-01-01 12:00:01 INFO [main] Servicio: Persona { Nombre = Ana, Activo = True }
+    2026-01-01 12:00:02 INFO [main] Servicio: Persona(nombre='Ana', etiquetas=['a', 'b'], extra=None)
+    2026-01-01 12:00:03 INFO [main] Servicio: Persona { nombre: "Ana", punto: Punto(1, 2) }
+
+busqueda:
+  esperaMs: 250
+  maxHistorial: 25
+  maxMarcarTodo: 2000      # máximo de coincidencias resaltadas a la vez
+  lineaLarga: 20000        # en documentos con líneas más largas que esto…
+  maxMarcarLineaLarga: 150 # …resaltar como máximo esta cantidad
+  anchoMin: 120
+  anchoMax: 1200
+  anchoDefecto: 300

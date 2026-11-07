@@ -1,0 +1,85 @@
+plugins {
+    id 'java'
+    id 'groovy'          // pruebas en Spock (Groovy)
+    id 'application'
+}
+
+group = 'com.dynamicparser'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+application {
+    mainClass = 'com.dynamicparser.Main'
+}
+
+repositories {
+    mavenCentral()
+}
+
+// ── Pruebas de interfaz (necesitan pantalla): source set aparte ─────────────
+sourceSets {
+    uiTest {
+        groovy.srcDir 'src/uiTest/groovy'
+        resources.srcDir 'src/uiTest/resources'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    uiTestImplementation.extendsFrom testImplementation
+    uiTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+dependencies {
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.17.2'   // application.yml
+    implementation 'com.fifesoft:rsyntaxtextarea:3.4.0'
+
+    testImplementation platform('org.spockframework:spock-bom:2.3-groovy-4.0')
+    testImplementation 'org.spockframework:spock-core'
+    testImplementation 'org.apache.groovy:groovy:4.0.21'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+tasks.withType(GroovyCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    maxHeapSize = '1g'          // la app usa por defecto 1/4 de la RAM; las pruebas de estrés necesitan margen
+    systemProperty 'file.encoding', 'UTF-8'
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+    }
+}
+
+// Pruebas sin interfaz: gradle test   (headless)
+test {
+    systemProperty 'java.awt.headless', 'true'
+}
+
+// Pruebas de interfaz (Robot, ventanas reales): gradle uiTest
+tasks.register('uiTest', Test) {
+    description = 'Pruebas funcionales de la interfaz Swing (requieren pantalla).'
+    group = 'verification'
+    testClassesDirs = sourceSets.uiTest.output.classesDirs
+    classpath = sourceSets.uiTest.runtimeClasspath
+    shouldRunAfter test
+    maxParallelForks = 1
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'com.dynamicparser.Main'
+    }
+}

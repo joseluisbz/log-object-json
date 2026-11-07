@@ -1,0 +1,85 @@
+# Dialectos de impresión de objetos que el parser sabe leer.
+#
+# Este archivo NO es application.yml: application.yml sólo indica cuál usar
+# (clave dialectos.archivo). Para modificarlo sin recompilar, copie este archivo a
+#   ~/.parser-dinamico/dialectos.yml   o   ./dialectos.yml
+# Los dialectos se combinan por "nombre": uno con el mismo nombre reemplaza al de
+# este archivo; uno con nombre nuevo se agrega. "activo: false" lo desactiva.
+#
+# Para cada línea del log se prueban todos los dialectos activos y gana el que:
+#   1) llega al final de la línea, 2) parsea más texto, 3) reconoce más valores
+#   (strings entre comillas y literales del dialecto), 4) aparece antes en la lista.
+#
+# Campos:
+#   nulos / verdaderos / falsos  palabras literales (sólo valen si el valor termina ahí)
+#   separadores                  caracteres entre clave y valor ("=" , ":" o ambos "=:")
+#   comillas                     caracteres que delimitan strings ('"', "'" o ambos)
+#   objetoParentesis             Clase(k=v, ...)
+#   objetoCorchetes              Clase[k=v, ...]          (record de Java)
+#   objetoLlaves                 Clase { k = v, ... }     (record de C#, struct de Rust)
+#   posicionales                 Clase(1, 2) → propiedades "0", "1" (tupla con nombre)
+#   tuplas                       (1, 2) sin nombre → lista
+#   conjuntos                    {1, 2} sin separadores → lista
+#   jsonEmbebido                 {"k": v} se marca como objeto JSON
+
+dialectos:
+
+  - nombre: java                 # Lombok @ToString, records, Map/List.toString(), JSON
+    activo: true
+    nulos: [ "null" ]
+    verdaderos: [ "true" ]
+    falsos: [ "false" ]
+    separadores: "="
+    comillas: "\""
+    objetoParentesis: true
+    objetoCorchetes: true
+    objetoLlaves: false
+    posicionales: false
+    tuplas: false
+    conjuntos: false
+    jsonEmbebido: true
+
+  - nombre: csharp               # record.ToString(): Persona { Nombre = Ana, Edad = 3 }; anónimos { A = 1 }
+    activo: true
+    nulos: [ "null" ]
+    verdaderos: [ "True", "true" ]
+    falsos: [ "False", "false" ]
+    separadores: "="
+    comillas: "\""
+    objetoParentesis: false
+    objetoCorchetes: false
+    objetoLlaves: true
+    posicionales: false
+    tuplas: true                 # ValueTuple: (1, Ana)
+    conjuntos: false
+    jsonEmbebido: true
+
+  - nombre: python               # repr(): dataclass/pydantic Persona(nombre='Ana', activo=True, x=None); dict/list/tuple/set
+    activo: true
+    nulos: [ "None" ]
+    verdaderos: [ "True" ]
+    falsos: [ "False" ]
+    separadores: "=:"            # '=' en dataclasses, ':' en dict
+    comillas: "'\""
+    objetoParentesis: true
+    objetoCorchetes: false
+    objetoLlaves: false
+    posicionales: true           # datetime.date(2026, 1, 1), Punto(1, 2)
+    tuplas: true
+    conjuntos: true
+    jsonEmbebido: false
+
+  - nombre: rust                 # {:?} Debug: Persona { nombre: "Ana", extra: None, v: Some(5) }; Punto(1, 2)
+    activo: true
+    nulos: [ "None" ]
+    verdaderos: [ "true" ]
+    falsos: [ "false" ]
+    separadores: ":"
+    comillas: "\"'"
+    objetoParentesis: true       # tuple structs y variantes: Some(5), Punto(1, 2)
+    objetoCorchetes: false
+    objetoLlaves: true
+    posicionales: true
+    tuplas: true
+    conjuntos: false
+    jsonEmbebido: false
