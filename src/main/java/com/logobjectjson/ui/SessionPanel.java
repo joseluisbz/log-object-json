@@ -36,6 +36,11 @@ public class SessionPanel extends JPanel {
         add(trios, BorderLayout.CENTER);
     }
 
+    /** The Root trio (loaded or pasted text). */
+    public TrioPanel root() {
+        return main;
+    }
+
     /** Opens an extracted branch in a new (closable) tab and selects it. */
     private void openBranch(String title, String path, String text) {
         var label = new JLabel(shorten(title), TreeIcons.OBJECT, SwingConstants.LEFT);

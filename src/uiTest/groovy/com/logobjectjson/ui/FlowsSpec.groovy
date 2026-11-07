@@ -149,7 +149,7 @@ class FlowsSpec extends UiSpec {
         then:
         eventually.eventually { assert sync(main()).startsWith('✔') }
         json(main()) == editedJson
-        onEdt { main().@jsonPanel.@lblInfo.text }.contains(Messages.get('json.outdated.edited'))
+        onEdt { main().@lblStatus.text }.contains(Messages.get('json.outdated.edited'))
     }
 
     def "text → tree: locates the property under the caret (instantiating if needed)"() {
@@ -583,6 +583,44 @@ class FlowsSpec extends UiSpec {
 
         then:
         onEdt { view.@box == null && view.@split.parent == view }
+    }
+
+    def "language selector: the window is rebuilt in the new language keeping the texts"() {
+        given:
+        def file = folder.resolve('sample.log')
+        java.nio.file.Files.writeString(file, LOG)
+        onEdt { main().loadFile(file) }
+        waitInSync(main())
+        def previous = Messages.language()
+
+        when:
+        def old = frame
+        frame = onEdt { old.switchLanguage('es') }
+
+        then: 'texts in Spanish, same Root text and file, and the old window is gone'
+        onEdt { frame.title } == Messages.get('app.title')
+        Messages.get('edit.copy') == 'Copiar'
+        !onEdt { old.displayable }
+        waitInSync(main())
+        text(main()) == LOG
+        sessionTitle() == 'sample.log'
+
+        cleanup:
+        frame = onEdt { frame.switchLanguage(previous) }
+    }
+
+    def "source toolbar has Copy; the JSON toolbar has neither the message label nor Wrap"() {
+        given:
+        setText(main(), LOG)
+        waitInSync(main())
+
+        when:
+        onEdt { findAll(main(), JButton).find { it.toolTipText == Messages.get('source.copy.tip') }.doClick() }
+
+        then:
+        java.awt.Toolkit.defaultToolkit.systemClipboard.getData(java.awt.datatransfer.DataFlavor.stringFlavor) == LOG
+        onEdt { findAll(main().@jsonPanel, AbstractButton).every { !(it.icon instanceof WrapIcon) } }
+        onEdt { findAll(main().@jsonPanel, JToolBar).size() } == 1          // a single toolbar: no extra Wrap bar
     }
 
     def "tree search has the editors' options: Cc, W, .*, 'No results' and history"() {

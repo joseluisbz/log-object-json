@@ -44,6 +44,9 @@ public class JsonEditor extends RSyntaxTextArea {
     /** "⋯" boxes painted in the last repaint → fold they expand. */
     private final Map<Rectangle, Fold> boxes = new LinkedHashMap<>();
 
+    /** Message painted (gray) while the editor is empty, e.g. "No serialization yet". */
+    private String emptyMessage;
+
     /** "Locate in tree" action (provided by whoever creates the editor). */
     private Consumer<List<Object>> locator;
     /** Path format for the tooltip (allows marking Map keys with "<,>"). */
@@ -150,9 +153,22 @@ public class JsonEditor extends RSyntaxTextArea {
         for (int i = 0; i < f.getChildCount(); i++) collect(f.getChild(i), out);
     }
 
+    public void setEmptyMessage(String message) {
+        this.emptyMessage = message;
+        repaint();
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
+        if (emptyMessage != null && getDocument().getLength() == 0) {
+            var g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setColor(Color.GRAY);
+            g2.setFont(getFont().deriveFont(Font.ITALIC));
+            g2.drawString(emptyMessage, getInsets().left + 6, getInsets().top + g2.getFontMetrics().getAscent() + 4);
+            g2.dispose();
+        }
         boxes.clear();
         var g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);

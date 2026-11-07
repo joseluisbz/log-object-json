@@ -354,6 +354,7 @@ public class TrioPanel extends JPanel {
                         locateInSource(origin, path);   // only selects: triggers no further search
                     });
             panel[0].setProposedFile(this::proposedJsonFile);
+            panel[0].setStatusSink(lblStatus::setText);
             panel[0].putClientProperty(ORIGIN, node);
             panel[0].putClientProperty(ORIGIN_ID, idOf(node));
             panel[0].setTooltipFormatter(path -> {
@@ -616,6 +617,15 @@ public class TrioPanel extends JPanel {
         bar.addSeparator();
         bar.add(EditToggle.create(textArea, true, Messages.get("source.editable.tip"), null));
         bar.add(btnOpen);
+        var btnCopy = new JButton(new CopyIcon(16));
+        btnCopy.setToolTipText(Messages.get("source.copy.tip"));
+        btnCopy.setFocusable(false);
+        btnCopy.addActionListener(e -> {
+            Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new java.awt.datatransfer.StringSelection(textArea.getText()), null);
+            lblStatus.setText(Messages.get("source.copied"));
+        });
+        bar.add(btnCopy);
         bar.add(lblFile);
         bar.addSeparator();
         bar.add(sourceSearch.getPanel());
@@ -740,19 +750,42 @@ public class TrioPanel extends JPanel {
         loadedText = textArea.getText();     // normalized by the editor (line breaks)
         textArea.setCaretPosition(0);
         textArea.discardAllEdits();
-        lblFile.setText(path.getFileName().toString());
+        showFileName(path);
         onTitleChange.accept(path.getFileName().toString());
+        lblStatus.setText(Messages.get("status.fileLoaded", path.toAbsolutePath(), textArea.getLineCount()));
+        autoInstantiate.stop();
+        instantiate(null);     // opening a file instantiates immediately
+    }
+
+    /** Shows the loaded file's name in the toolbar (fixed size so the search box does not clip it). */
+    private void showFileName(Path path) {
+        lblFile.setText(path.getFileName().toString());
         lblFile.setToolTipText(path.toAbsolutePath().toString());
-        // Fixed size (with margin) so the search box does not clip it
         lblFile.setPreferredSize(null);
         var d = lblFile.getPreferredSize();
         d = new Dimension(d.width + 24, d.height);
         lblFile.setPreferredSize(d);
         lblFile.setMinimumSize(d);
         lblFile.setMaximumSize(d);
-        lblStatus.setText(Messages.get("status.fileLoaded", path.toAbsolutePath(), textArea.getLineCount()));
+    }
+
+    /** What is needed to rebuild this tab (e.g. after changing the UI language). */
+    public record Snapshot(String text, Path loadedFile, String loadedText) { }
+
+    public Snapshot snapshot() {
+        return new Snapshot(textArea.getText(), loadedFile, loadedText);
+    }
+
+    /** Restores a snapshot: same text and loaded file (the tree and JSON are rebuilt by the sync). */
+    public void restore(Snapshot s) {
+        loadedFile = s.loadedFile();
+        loadedText = s.loadedText();
+        if (loadedFile != null) showFileName(loadedFile);
+        textArea.setText(s.text());
+        textArea.setCaretPosition(0);
+        textArea.discardAllEdits();
         autoInstantiate.stop();
-        instantiate(null);     // opening a file instantiates immediately
+        if (!s.text().isBlank()) instantiate(null);
     }
 
     /** Shared look for the main toolbar buttons. */
@@ -978,18 +1011,19 @@ public class TrioPanel extends JPanel {
                     resultTree.setModel(new DefaultTreeModel(newRoot));
                     if (state == null) expandFirstLevels(INITIAL_EXPANDED_LEVELS);
                     else restoreTreeState(state);
-                    refreshJson();
-                    ensureJson();
-                    boolean intact = loadedFile != null && content.equals(loadedText);
-                    if (intact) onTitleChange.accept(loadedFile.getFileName().toString());
-                    else if (!isBranch) onTitleChange.accept(Messages.get("trio.pastedText"));
-
+                    // Status first: refreshing the JSON may report something more specific (e.g. hand-edited)
                     String dialect = valid.get(0).dialect();
                     String detail = dialect == null ? Messages.get("status.instantiated")
                             : Messages.get("status.instantiated.dialect", dialect);
                     status(ValidateIcon.State.VALID, Messages.get("sync.ok"), detail, -1);
                     showLanguages(dialect);
                     lblStatus.setText("✔  " + detail);
+
+                    refreshJson();
+                    ensureJson();
+                    boolean intact = loadedFile != null && content.equals(loadedText);
+                    if (intact) onTitleChange.accept(loadedFile.getFileName().toString());
+                    else if (!isBranch) onTitleChange.accept(Messages.get("trio.pastedText"));
                 } catch (Exception ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                     cause.printStackTrace();

@@ -57,19 +57,76 @@ class ConfigSpec extends Specification {
         }
     }
 
-    def "every message key the code uses exists in messages.properties"() {
-        given: 'keys in Messages.get("key") and Messages.get(cond ? "a" : "b") calls'
+    private static List<String> messageKeysUsedInCode() {
         def used = []
         new File('src/main/java').eachFileRecurse { f ->
             if (f.name.endsWith('.java')) {
                 (f.text =~ /Messages\.get\(\s*"([^"]+)"/).each { used << it[1] }
                 (f.text =~ /Messages\.get\([^()"]*\?\s*"([^"]+)"\s*:\s*"([^"]+)"/).each { used << it[1] << it[2] }
+                (f.text =~ /error\([^,]+,\s*"(lint\.[^"]+)"|"(lint\.[^"]+)"/).each { used << (it[1] ?: it[2]) }
             }
         }
-        def bundle = ResourceBundle.getBundle('messages')
+        used.unique()
+    }
+
+    def "every message key the code uses exists in every language"() {
+        given:
+        def used = messageKeysUsedInCode()
 
         expect:
-        used.size() > 50
-        used.unique().findAll { !bundle.containsKey(it) } == []
+        used.size() > 100
+        Messages.languages() == ['en', 'es', 'fr', 'pt', 'de', 'it']
+        Messages.languages().every { lang -> used.findAll { !Messages.has(lang, it) } == [] }
+    }
+
+    def "every language file has exactly the keys of the default language, with the same placeholders"() {
+        given:
+        def keys = { String lang ->
+            def text = Messages.getResourceAsStream("/i18n/messages_${lang}.yml").getText('UTF-8')
+            (text =~ /(?m)^"([^"]+)":/).collect { it[1] } as Set
+        }
+        def en = keys('en')
+
+        expect:
+        Messages.languages().every { keys(it) == en }
+        Messages.languages().every { lang ->
+            en.every { k -> placeholders(Messages.in(lang, k)) == placeholders(Messages.in('en', k)) }
+        }
+    }
+
+    private static Set<String> placeholders(String s) { (s =~ /\{(\d)/).collect { it[1] } as Set }
+
+    def "switching the language changes the texts and is remembered; unknown languages fall back"() {
+        given:
+        def previous = Messages.language()
+
+        when:
+        Messages.setLanguage('es')
+
+        then:
+        Messages.get('edit.copy') == 'Copiar'
+        Messages.get('problems.position', 2189, 7) == 'Línea 2189, col 7'      // no thousands separator
+
+        when:
+        Messages.setLanguage('xx')
+
+        then:
+        Messages.language() == Messages.defaultLanguage()
+
+        cleanup:
+        Messages.setLanguage(previous)
+    }
+
+    def "apostrophes in translations are literal (no MessageFormat quoting surprises)"() {
+        given:
+        def previous = Messages.language()
+        Messages.setLanguage('fr')
+
+        expect:
+        Messages.get('status.fileLoaded', 'x.log', 3).contains('chargé : x.log')
+        Messages.get('lint.unclosed', 'objet', 12, "'}'").contains("'}'")
+
+        cleanup:
+        Messages.setLanguage(previous)
     }
 }

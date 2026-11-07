@@ -50,7 +50,8 @@ public class JsonViewerPanel extends JPanel {
     private boolean modified;
     /** true while the text is set from code (does not count as a user edit). */
     private boolean loading;
-    private final JLabel lblInfo = new JLabel(" ");
+    /** Where status messages go (the trio's status bar); ignored until set. */
+    private Consumer<String> statusSink = s -> { };
     private final ValidateIcon validateIcon = new ValidateIcon(16);
     private JButton btnValidate;
     private JButton btnSave;
@@ -106,7 +107,7 @@ public class JsonViewerPanel extends JPanel {
 
         // Editable: pencil toggle (highlighted while editing is allowed)
         var tglEditable = EditToggle.create(editor, false, Messages.get("json.editable.tip"),
-                on -> lblInfo.setText(on ? Messages.get("json.editMode") : " "));
+                on -> info(on ? Messages.get("json.editMode") : " "));
 
         // Validate: validated live while editing (problems view); a click validates now
         // and, if there are errors, goes to the first one
@@ -151,22 +152,9 @@ public class JsonViewerPanel extends JPanel {
         });
         bar.addSeparator();
         bar.add(findReplace.getPanel());
-        bar.addSeparator();
-        bar.add(lblInfo);
-
-        // "Wrap Lines" fixed on the right edge (like Postman), always visible even if the toolbar does not fit
-        var tglWrap = new JToggleButton(new WrapIcon());
-        tglWrap.setToolTipText(Messages.get("wrap.tip"));
-        tglWrap.setFocusable(false);
-        tglWrap.addActionListener(e -> editor.setLineWrap(tglWrap.isSelected()));
-        var rightBar = new JToolBar();
-        rightBar.setFloatable(false);
-        rightBar.setRollover(true);
-        rightBar.add(tglWrap);
 
         bars = new JPanel(new BorderLayout());
         bars.add(bar, BorderLayout.CENTER);
-        bars.add(rightBar, BorderLayout.EAST);
 
         add(bars, BorderLayout.NORTH);
         problemsView = new ProblemsView(editor, scroll, this::analyze, this::problemsChanged);
@@ -182,7 +170,7 @@ public class JsonViewerPanel extends JPanel {
         String text = editor.getText();
         int off = JsonPath.offsetOf(text, path);
         if (off < 0) {
-            lblInfo.setText(Messages.get("json.pathNotFound", JsonPath.format(path)));
+            info(Messages.get("json.pathNotFound", JsonPath.format(path)));
             return false;
         }
         // Select the whole key ("key") or up to the end of the line
@@ -200,13 +188,22 @@ public class JsonViewerPanel extends JPanel {
         editor.select(off, end);
         editor.requestFocusInWindow();
         SwingUtilities.invokeLater(() -> Centering.on(editor, off));
-        lblInfo.setText(path.isEmpty() ? Messages.get("json.root") : "→ " + JsonPath.format(path));
+        info(path.isEmpty() ? Messages.get("json.root") : "→ " + JsonPath.format(path));
         return true;
     }
 
     /** Height of the toolbars row (to align neighboring toolbars with it). */
     public int toolbarHeight() {
         return bars.getPreferredSize().height;
+    }
+
+    /** Where the status messages of this panel go (e.g. the trio's status bar). */
+    public void setStatusSink(Consumer<String> sink) {
+        this.statusSink = sink != null ? sink : s -> { };
+    }
+
+    private void info(String message) {
+        statusSink.accept(message);
     }
 
     /** Path tooltip format (e.g. with "<,>" marks on Map keys). */
@@ -222,8 +219,7 @@ public class JsonViewerPanel extends JPanel {
         disableAll(this);
         editor.setEnabled(false);
         editor.setHighlightCurrentLine(false);
-        lblInfo.setEnabled(true);
-        lblInfo.setText("ℹ " + message);
+        editor.setEmptyMessage("ℹ " + message);
     }
 
     private static void disableAll(Container c) {
@@ -244,7 +240,6 @@ public class JsonViewerPanel extends JPanel {
      */
     public void updateJson(String json) {
         if (json.equals(editor.getText())) {
-            lblInfo.setText(" ");
             return;
         }
         int caret = editor.getCaretPosition();
@@ -259,7 +254,7 @@ public class JsonViewerPanel extends JPanel {
         markValid();
         editor.setCaretPosition(Math.min(caret, json.length()));
         SwingUtilities.invokeLater(() -> editor.scrollRectToVisible(view));
-        lblInfo.setText(Messages.get("json.updated"));
+        info(Messages.get("json.updated"));
     }
 
     /** JSON generated from the tree is valid by construction: no need to re-parse it. */
@@ -272,7 +267,7 @@ public class JsonViewerPanel extends JPanel {
 
     /** Marks that the panel no longer reflects the source text (and why). */
     public void markOutdated(String reason) {
-        lblInfo.setText("⚠ " + reason);
+        info("⚠ " + reason);
     }
 
     /** Full text (includes collapsed parts: folding only hides views). */
@@ -283,7 +278,7 @@ public class JsonViewerPanel extends JPanel {
     private void copy() {
         Toolkit.getDefaultToolkit().getSystemClipboard()
                .setContents(new StringSelection(getJson()), null);
-        lblInfo.setText(Messages.get("json.copied"));
+        info(Messages.get("json.copied"));
     }
 
     public void setProposedFile(Supplier<File> proposal) {
@@ -317,8 +312,7 @@ public class JsonViewerPanel extends JPanel {
         }
         try {
             Files.writeString(target.toPath(), json, StandardCharsets.UTF_8);
-            lblInfo.setText(Messages.get("json.saved.valid", target.getName()));
-            lblInfo.setToolTipText(target.getAbsolutePath());
+            info(Messages.get("json.saved.valid", target.getAbsolutePath()));
         } catch (IOException ex) {
             ErrorDialog.show(this, Messages.get("json.save.error"), ex);
         }
@@ -356,7 +350,7 @@ public class JsonViewerPanel extends JPanel {
         btnSave.setEnabled(errors == 0);
         btnValidate.setToolTipText(errors == 0 ? Messages.get("json.validate.tip") : Messages.get("json.invalid.goTo", errors));
         btnValidate.repaint();
-        if (errors > 0) lblInfo.setText(Messages.get("json.invalid.saveDisabled", errors));
-        else if (modified) lblInfo.setText(Messages.get("json.valid"));
+        if (errors > 0) info(Messages.get("json.invalid.saveDisabled", errors));
+        else if (modified) info(Messages.get("json.valid"));
     }
 }

@@ -7,6 +7,8 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Main window: a JTabbedPane of SESSIONS. Each session ({@link SessionPanel})
@@ -26,6 +28,11 @@ public class MainFrame extends JFrame {
     private boolean adjusting;
 
     public MainFrame() {
+        this(List.of());
+    }
+
+    /** @param restore Root texts to restore, one per session (e.g. after a language change) */
+    public MainFrame(List<TrioPanel.Snapshot> restore) {
         super(Messages.get("app.title"));
 
         // "+" tab: selecting it creates a new session
@@ -35,8 +42,11 @@ public class MainFrame extends JFrame {
             if (!adjusting && sessions.getSelectedComponent() == newTab) newSession();
         });
 
-        newSession();
+        if (restore.isEmpty()) newSession();
+        else restore.forEach(s -> newSession().root().restore(s));
+        if (sessions.getTabCount() > 1) sessions.setSelectedIndex(0);
         setContentPane(sessions);
+        setJMenuBar(languageBar());
 
         shortcut(KeyStroke.getKeyStroke(KeyEvent.VK_T, InputEvent.CTRL_DOWN_MASK), "session.new", this::newSession);
         shortcut(KeyStroke.getKeyStroke(KeyEvent.VK_W, InputEvent.CTRL_DOWN_MASK), "session.close", () -> {
@@ -47,6 +57,55 @@ public class MainFrame extends JFrame {
         setSize(1300, 820);
         setMinimumSize(new Dimension(780, 580));
         setLocationRelativeTo(null);
+    }
+
+    /** Thin bar with the language selector (flag + name) on the right. */
+    private JMenuBar languageBar() {
+        var combo = new JComboBox<>(Messages.languages().toArray(String[]::new));
+        combo.setSelectedItem(Messages.language());
+        combo.setFocusable(false);
+        combo.setToolTipText(Messages.get("lang.tip"));
+        combo.setMaximumSize(combo.getPreferredSize());
+        combo.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                          boolean selected, boolean focus) {
+                super.getListCellRendererComponent(list, value, index, selected, focus);
+                String lang = String.valueOf(value);
+                setIcon(new FlagIcon(lang));
+                setText(Messages.in(lang, "lang.name"));
+                setIconTextGap(6);
+                return this;
+            }
+        });
+        combo.setMaximumSize(new Dimension(combo.getPreferredSize().width + 30, combo.getPreferredSize().height));
+        combo.addActionListener(e -> {
+            String lang = (String) combo.getSelectedItem();
+            if (lang != null && !lang.equals(Messages.language())) SwingUtilities.invokeLater(() -> switchLanguage(lang));
+        });
+        var bar = new JMenuBar();
+        bar.add(Box.createHorizontalGlue());
+        bar.add(combo);
+        bar.add(Box.createHorizontalStrut(4));
+        return bar;
+    }
+
+    /**
+     * Changes the UI language: rebuilds the window in the new language, keeping
+     * each session's Root text and loaded file (and the window bounds).
+     */
+    public MainFrame switchLanguage(String lang) {
+        var snapshots = new ArrayList<TrioPanel.Snapshot>();
+        for (int i = 0; i < sessions.getTabCount(); i++) {
+            if (sessions.getComponentAt(i) instanceof SessionPanel s) snapshots.add(s.root().snapshot());
+        }
+        Messages.setLanguage(lang);
+        var frame = new MainFrame(snapshots);
+        frame.setBounds(getBounds());
+        frame.setExtendedState(getExtendedState());
+        frame.setVisible(true);
+        dispose();
+        return frame;
     }
 
     /** Creates an empty session before the "+" tab and selects it. */

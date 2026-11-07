@@ -3,7 +3,7 @@
 #   ~/.log-object-json/application.yml   or   ./application.yml
 # or pass -Dlojson.<dotted.key>=value when launching the application
 #   (e.g. -Dlojson.sync.delayMs=900).
-# UI texts live in messages.properties, not here.
+# UI texts live in i18n/messages_<lang>.yml, not here.
 
 sync:
   delayMs: 600             # ms after the last keystroke before re-instantiating
@@ -43,3 +43,8 @@ hoverMenu:                 # node actions menu (tree): translucent on hover, fix
 problems:                  # problems list (JSON and log text)
   listHeight: 130          # initial height of the embedded list / floating box (px)
   floatingOpacity: 0.6     # opacity of the floating box while the cursor is not over it (0..1)
+
+i18n:                      # UI languages (selector with flags at the top right)
+  languages: en, es, fr, pt, de, it
+  default: en              # also the fallback for texts missing in a language
+  resource: i18n/messages_{lang}.yml
