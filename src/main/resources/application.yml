@@ -39,3 +39,7 @@ hoverMenu:                 # node actions menu (tree): translucent on hover, fix
   offsetX: 18              # position relative to the cursor while following it (px)
   offsetY: -6              #   (negative = above the cursor, so it does not cover the tooltip)
   fadeMs: 160              # duration of the translucent → opaque transition
+
+problems:                  # problems list (JSON and log text)
+  listHeight: 130          # initial height of the embedded list / floating box (px)
+  floatingOpacity: 0.6     # opacity of the floating box while the cursor is not over it (0..1)

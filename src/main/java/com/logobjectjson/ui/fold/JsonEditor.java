@@ -122,6 +122,10 @@ public class JsonEditor extends RSyntaxTextArea {
     @Override
     public String getToolTipText(MouseEvent e) {
         if (boxAt(e.getPoint()) != null) return Messages.get("json.expand");
+        int off = viewToModel2D(e.getPoint());
+        for (var notice : getParserNotices()) {
+            if (off >= 0 && notice.containsPosition(off)) return notice.getMessage();
+        }
         List<Object> path = pathAt(e.getPoint());
         return path != null ? tooltipFormatter.apply(path) : super.getToolTipText(e);
     }

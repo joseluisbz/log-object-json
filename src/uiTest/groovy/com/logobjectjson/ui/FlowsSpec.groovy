@@ -531,7 +531,8 @@ class FlowsSpec extends UiSpec {
         onEdt { main().@btnStatus.doClick() }
 
         then: 'caret at the first object'
-        onEdt { main().@textArea.caretPosition } == 'header'.length() + 1
+        onEdt { main().@textArea.selectionStart } == 'header'.length() + 1
+        onEdt { main().@sourceView.problems.size() } == 2           // one row per object
 
         when:
         setText(main(), LOG)
@@ -539,6 +540,49 @@ class FlowsSpec extends UiSpec {
         then:
         waitInSync(main())
         onEdt { main().@statusIcon.@state.toString() } == 'VALID'
+    }
+
+    def "JSON problems: several errors listed, F2 navigates, the list floats and docks"() {
+        given:
+        setText(main(), LOG)
+        waitInSync(main())
+        def panel = onEdt { main().@jsonPanel }
+        def editor = onEdt { panel.@editor }
+        def view = onEdt { panel.@problemsView }
+
+        when: 'two errors in different places'
+        onEdt {
+            findAll(panel, JToggleButton).find { it.toolTipText == Messages.get('json.editable.tip') }.doClick()
+            int last = editor.text.lastIndexOf('}')
+            editor.insert(',', editor.text.lastIndexOf('"', last))     // a comma inside the last value: breaks it
+            editor.insert(',,', editor.text.indexOf(','))               // extra comma near the top
+        }
+
+        then: 'the list appears embedded, with every error'
+        eventually.eventually { assert onEdt { view.problems.count { it.isError() } } >= 2 }
+        onEdt { view.@split?.parent == view }
+        !onEdt { panel.@btnSave.enabled }
+
+        when: 'F2 goes to the next one, twice'
+        def first = onEdt { editor.caretPosition = 0; view.next(true); editor.selectionStart }
+        def second = onEdt { view.next(true); editor.selectionStart }
+
+        then:
+        first < second
+        onEdt { view.problems*.offset().contains(first) && view.problems*.offset().contains(second) }
+
+        when: 'detach it as a floating box'
+        onEdt { view.toggleFloating() }
+
+        then:
+        onEdt { view.@box != null && view.@box.visible && view.@box.parent instanceof JLayeredPane }
+        onEdt { view.@split?.parent != view }
+
+        when: 'dock it again'
+        onEdt { view.toggleFloating() }
+
+        then:
+        onEdt { view.@box == null && view.@split.parent == view }
     }
 
     def "tree search has the editors' options: Cc, W, .*, 'No results' and history"() {

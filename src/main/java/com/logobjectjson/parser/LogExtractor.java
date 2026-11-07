@@ -83,7 +83,8 @@ public class LogExtractor {
                 if (best != null) {
                     int base = lineStart + indent + best.start();   // absolute offset of the fragment
                     if (best.error() != null) {
-                        entries.add(new ParsedEntry(line, ParsedEntry.ERROR_PREFIX + best.error()));
+                        entries.add(new ParsedEntry(line, ParsedEntry.ERROR_PREFIX + best.error(),
+                                base, base, List.of(), null));
                     } else {
                         var spans = best.parser().getSpans().stream().map(sp -> sp.shifted(base)).toList();
                         int end = base + best.parser().getPosition();

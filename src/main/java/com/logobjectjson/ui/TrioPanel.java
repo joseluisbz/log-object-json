@@ -100,6 +100,10 @@ public class TrioPanel extends JPanel {
     private String syncText = " ";
     /** Offset of the problem in the text (-1 = none). */
     private int problemOffset = -1;
+    /** Problems of the source text (several objects, unparseable lines, serialization) and the text they refer to. */
+    private List<com.logobjectjson.validation.Problem> sourceProblems = List.of();
+    private String sourceProblemsText;
+    private ProblemsView sourceView;
     /** Languages whose printing syntax matches the object (hint, from dialects.yml). */
     private final JLabel lblLanguage = new LanguageBadge();
 
@@ -623,8 +627,10 @@ public class TrioPanel extends JPanel {
         scroll.setFoldIndicatorEnabled(false);
         scroll.setMinimumSize(new Dimension(100, 60));
 
+        sourceView = new ProblemsView(textArea, scroll,
+                text -> text.equals(sourceProblemsText) ? sourceProblems : List.of(), null);
         panel.add(bar, BorderLayout.NORTH);
-        panel.add(scroll, BorderLayout.CENTER);
+        panel.add(sourceView, BorderLayout.CENTER);
         return panel;
     }
 
@@ -801,6 +807,17 @@ public class TrioPanel extends JPanel {
      * @param offset where the problem is in the text (-1 = none)
      */
     private void status(ValidateIcon.State state, String headline, String detail, int offset) {
+        status(state, headline, detail, offset, List.of());
+    }
+
+    /** Same, with the problems to list/underline in the source text. */
+    private void status(ValidateIcon.State state, String headline, String detail, int offset,
+                        List<com.logobjectjson.validation.Problem> problems) {
+        if (state != ValidateIcon.State.PENDING) {
+            sourceProblems = List.copyOf(problems);
+            sourceProblemsText = textArea.getText();
+            if (sourceView != null) sourceView.refresh();
+        }
         if (state != ValidateIcon.State.VALID) lblLanguage.setVisible(false);   // shown again after a valid sync
         syncText = headline;
         problemOffset = offset;
@@ -811,9 +828,12 @@ public class TrioPanel extends JPanel {
         btnStatus.repaint();
     }
 
-    /** ✖: go to the problem in the text; otherwise: validate (re-instantiate) now. */
+    /** ✖: show the problems and go to the first one; otherwise: validate (re-instantiate) now. */
     private void statusClicked() {
-        if (problemOffset >= 0 && syncText.startsWith("⚠")) {
+        if (syncText.startsWith("⚠") && !sourceProblems.isEmpty()) {
+            sourceView.validateNow();
+            sourceView.goToFirst();
+        } else if (problemOffset >= 0 && syncText.startsWith("⚠")) {
             int off = Math.min(problemOffset, textArea.getDocument().getLength());
             textArea.requestFocusInWindow();
             textArea.setCaretPosition(off);
@@ -822,6 +842,32 @@ public class TrioPanel extends JPanel {
             autoInstantiate.stop();
             instantiate(null);
         }
+    }
+
+    /** A problem covering an entry's object in the text. */
+    private static com.logobjectjson.validation.Problem problemAt(ParsedEntry e, String message) {
+        int start = Math.max(0, e.baseOffset());
+        return new com.logobjectjson.validation.Problem(start, Math.max(1, e.endOffset() - start),
+                com.logobjectjson.validation.Problem.Severity.ERROR, message);
+    }
+
+    /** Problems when no object could be obtained: each unparseable line, or "nothing found". */
+    private static List<com.logobjectjson.validation.Problem> noObjectProblems(String content, List<ParsedEntry> entries) {
+        var out = new ArrayList<com.logobjectjson.validation.Problem>();
+        for (var e : entries) {
+            if (!e.isError()) continue;
+            int start = Math.max(0, e.baseOffset());
+            int end = content.indexOf('\n', start);
+            out.add(new com.logobjectjson.validation.Problem(start, (end < 0 ? content.length() : end) - start,
+                    com.logobjectjson.validation.Problem.Severity.ERROR,
+                    Messages.get("src.parseError", String.valueOf(e.parsed()).substring(ParsedEntry.ERROR_PREFIX.length()))));
+        }
+        if (out.isEmpty()) {
+            int end = content.indexOf('\n');
+            out.add(new com.logobjectjson.validation.Problem(0, end < 0 ? content.length() : end,
+                    com.logobjectjson.validation.Problem.Severity.ERROR, Messages.get("src.noObjects")));
+        }
+        return out;
     }
 
     /** Problem serializing the parsed object to valid JSON, or null if it is fine. */
@@ -902,7 +948,8 @@ public class TrioPanel extends JPanel {
                         // Keep the last valid version
                         instantiatedText = null;
                         status(ValidateIcon.State.INVALID, Messages.get("sync.noObjects"), Messages.get(entries.isEmpty()
-                                ? "sync.noObjects.none.tip" : "sync.noObjects.error.tip"), 0);
+                                ? "sync.noObjects.none.tip" : "sync.noObjects.error.tip"), 0,
+                                noObjectProblems(content, entries));
                         return;
                     }
 
@@ -918,7 +965,8 @@ public class TrioPanel extends JPanel {
                     if (jsonProblem != null) {
                         instantiatedText = null;
                         status(ValidateIcon.State.INVALID, Messages.get("sync.jsonError"), jsonProblem,
-                                Math.max(0, valid.get(0).baseOffset()));
+                                Math.max(0, valid.get(0).baseOffset()),
+                                List.of(problemAt(valid.get(0), Messages.get("src.jsonError", jsonProblem))));
                         return;
                     }
 
@@ -977,8 +1025,12 @@ public class TrioPanel extends JPanel {
         resultTree.setModel(new DefaultTreeModel(
                 new DefaultMutableTreeNode(Messages.get("tree.severalObjects", valid.size()))));
         removeJson(Messages.get("json.severalObjects", valid.size()));
+        var problems = new ArrayList<com.logobjectjson.validation.Problem>();
+        for (int i = 0; i < valid.size(); i++) {
+            problems.add(problemAt(valid.get(i), Messages.get("src.severalObjects", i + 1, valid.size())));
+        }
         status(ValidateIcon.State.INVALID, Messages.get("sync.severalObjects"), msg,
-                Math.max(0, valid.get(0).baseOffset()));
+                Math.max(0, valid.get(0).baseOffset()), problems);
         lblStatus.setText("⚠  " + msg);
     }
 
