@@ -63,4 +63,4 @@ compare:                   # comparison Pattern vs Sample (⇄ on the Root tab)
     missing: "#C8281E"     # − in the Pattern, not in the Sample
     extra: "#1E8C46"       # + in the Sample, not in the Pattern
     type: "#1E5AC8"        # ≠ different type
-    value: "#7A7A7A"       # ~ different value
+    value: "#4F5D73"       # ~ different value (slate gray: visible, not mistaken for white or blue)
