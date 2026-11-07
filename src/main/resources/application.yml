@@ -65,3 +65,11 @@ compare:                   # comparison Pattern vs Sample (⇄ on the Root tab)
     extra: "#1E8C46"       # + in the Sample, not in the Pattern
     type: "#1E5AC8"        # ≠ different type
     value: "#4F5D73"       # ~ different value (slate gray: visible, not mistaken for white or blue)
+
+languageIconResource: languages/{id}.png   # 64x64 logos (Devicon, MIT license: languages/LICENSE-devicon.txt)
+languageIcons:             # language (as written in dialects.yml) → icon id; without an icon its name is shown
+  Java: java
+  Kotlin: kotlin
+  "C#": csharp
+  Python: python
+  Rust: rust

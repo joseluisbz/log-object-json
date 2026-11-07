@@ -88,6 +88,7 @@ public class TreeSearchBar extends JPanel {
         box.setMaximumSize(new Dimension(Integer.MAX_VALUE, BOX_HEIGHT));
 
         lblStatus.setForeground(Color.DARK_GRAY);
+        FindReplacePanel.showStatus(lblStatus, Messages.get("search.noResults"), false);
         lblStatus.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 4));
         var statusSize = new Dimension(95, BOX_HEIGHT);
         lblStatus.setPreferredSize(statusSize);
@@ -162,7 +163,7 @@ public class TreeSearchBar extends JPanel {
     }
 
     private void status(String text, boolean error) {
-        lblStatus.setText(text);
+        FindReplacePanel.showStatus(lblStatus, text, error);
         var bg = error ? ERROR_BG : UIManager.getColor("TextField.background");
         box.setBackground(bg);
         txt.setBackground(bg);

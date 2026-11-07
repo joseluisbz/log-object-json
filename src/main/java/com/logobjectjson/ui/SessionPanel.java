@@ -49,6 +49,7 @@ public class SessionPanel extends JPanel {
         var title = new JLabel(Messages.get("trio.root"), TreeIcons.OBJECT, SwingConstants.LEFT);
         var compare = FindReplacePanel.FlatButton.toggle("⇄", Messages.get("compare.toggle.tip"));
         compareToggle = compare;
+        main.setCompareListener(compare::setSelected);
         compare.setMargin(new Insets(0, 4, 0, 4));
         compare.addActionListener(e -> {
             main.setComparing(compare.isSelected());

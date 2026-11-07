@@ -82,7 +82,7 @@ public class FindReplacePanel {
     private final FlatButton tglWord  = FlatButton.toggle("W",  Messages.get("search.wholeWord"));
     private final FlatButton tglRegex = FlatButton.toggle(".*", Messages.get("search.regex"));
     private final FlatButton tglReplace = FlatButton.toggle("›", Messages.get("search.toggleReplace"));
-    private final JLabel lblStatus = new JLabel(Messages.get("search.noResults"));
+    private final JLabel lblStatus = new JLabel();
     private final JButton btnReplace = new JButton(Messages.get("search.replace"));
     private final JButton btnReplaceAll = new JButton(Messages.get("search.replaceAll"));
 
@@ -123,6 +123,7 @@ public class FindReplacePanel {
     private void build() {
         lblStatus.setPreferredSize(new Dimension(95, lblStatus.getPreferredSize().height));
         lblStatus.setForeground(Color.DARK_GRAY);
+        showStatus(lblStatus, Messages.get("search.noResults"), false);
         fixed(lblStatus);
         fixed(tglReplace);
         fixed(tglCase);
@@ -388,8 +389,16 @@ public class FindReplacePanel {
     }
 
     private void status(String text, boolean error) {
-        lblStatus.setText(text);
+        showStatus(lblStatus, text, error && !findText().isEmpty());
         findBox.setError(error && !findText().isEmpty());
+    }
+
+    /** "No results" is shown as an icon (with the text as tooltip); counts like "3 of 12" as text. */
+    static void showStatus(JLabel label, String text, boolean error) {
+        boolean none = text.equals(Messages.get("search.noResults"));
+        label.setIcon(none ? new NoResultsIcon(error) : null);
+        label.setText(none ? "" : text);
+        label.setToolTipText(none ? text : null);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -659,6 +668,15 @@ public class FindReplacePanel {
         /** Flat action button (does not stay pressed). */
         static JButton action(String text, String tip, Runnable r) {
             var b = new JButton(text) {
+                /** Short texts (↑ ↓ ✕ ⧉) get a compact width instead of the Look&Feel's minimum. */
+                @Override public Dimension getPreferredSize() {
+                    var d = super.getPreferredSize();
+                    String t = getText();
+                    if (getIcon() == null && t != null && !t.isEmpty() && t.length() <= 2) {
+                        d = new Dimension(Math.min(d.width, getFontMetrics(getFont()).stringWidth(t) + 12), d.height);
+                    }
+                    return d;
+                }
                 @Override protected void paintComponent(Graphics g) {
                     paintBackground(this, (Graphics2D) g, false, getModel().isRollover(), getModel().isPressed());
                     super.paintComponent(g);

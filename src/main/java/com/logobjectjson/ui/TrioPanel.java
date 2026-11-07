@@ -166,10 +166,21 @@ public class TrioPanel extends JPanel {
         @Override public void status(String text) { lblStatus.setText(text); }
         @Override public File proposedJsonFile() { return TrioPanel.this.proposedJsonFile(); }
         @Override public Path patternFile() { return loadedFile; }
+        @Override public void exitCompare() {
+            setComparing(false);
+            compareListener.accept(false);
+        }
         @Override public void setPatternEditable(boolean editable) {
             if (sourceEditToggle != null && sourceEditToggle.isSelected() != editable) sourceEditToggle.doClick();
         }
     });
+
+    /** Told when the comparison is closed from inside (✕ on the Sample), to update the ⇄ button. */
+    private java.util.function.Consumer<Boolean> compareListener = on -> { };
+
+    public void setCompareListener(java.util.function.Consumer<Boolean> listener) {
+        this.compareListener = listener != null ? listener : on -> { };
+    }
 
     /** Turns the comparison mode on/off (⇄ on the Root tab). */
     public void setComparing(boolean on) {
@@ -374,6 +385,10 @@ public class TrioPanel extends JPanel {
      */
     private List<HoverActionMenu.Item> sourceActionsAt(Point p, boolean fixed) {
         int off = textOffsetAt(textArea, p);
+        if (compare.isActive()) {
+            var locate = compare.patternActionsAt(off);
+            return fixed ? HoverActionMenu.concat(locate, HoverActionMenu.editItems(textArea)) : locate;
+        }
         boolean synced = currentEntries != null && textArea.getText().equals(instantiatedText);
         boolean onObject = off >= 0 && synced && currentEntries.stream().anyMatch(en -> en.contains(off));
         var locate = onObject || (fixed && off >= 0 && !synced && textArea.getDocument().getLength() > 0)
@@ -985,7 +1000,9 @@ public class TrioPanel extends JPanel {
     private void showLanguages(String dialectName) {
         if (dialectName == null) return;
         var langs = com.logobjectjson.parser.Dialect.byName(dialectName).languages();
-        lblLanguage.setText(String.join(" · ", langs));
+        var logos = LanguageIcons.row(langs);
+        lblLanguage.setIcon(logos);
+        lblLanguage.setText(logos != null ? null : String.join(" · ", langs));
         lblLanguage.setToolTipText(Messages.get("source.language.tip", String.join(", ", langs), dialectName));
         lblLanguage.setVisible(true);
     }

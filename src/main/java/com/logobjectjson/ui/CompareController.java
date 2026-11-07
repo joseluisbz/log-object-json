@@ -89,6 +89,8 @@ final class CompareController {
         File proposedJsonFile();
         /** File the Pattern was loaded from, or null. */
         Path patternFile();
+        /** Leaves the comparison (✕ on the Sample title), keeping the ⇄ button in sync. */
+        void exitCompare();
         void setPatternEditable(boolean editable);
     }
 
@@ -168,8 +170,18 @@ final class CompareController {
         host.setPatternEditable(false);          // the Pattern is the reference: locked by default
 
         updateTitles();
-        var left = titled(lblPatternTitle, sourceView);
-        var right = titled(lblSampleTitle, samplePanel());
+        var leftHeader = header(lblPatternTitle, null);
+        var rightHeader = header(lblSampleTitle, sampleTools());
+        int h = Math.max(leftHeader.getPreferredSize().height, rightHeader.getPreferredSize().height);
+        for (var hd : List.of(leftHeader, rightHeader)) {
+            hd.setPreferredSize(new Dimension(hd.getPreferredSize().width, h));
+        }
+        var left = new JPanel(new BorderLayout(0, 2));
+        left.add(leftHeader, BorderLayout.NORTH);
+        left.add(sourceView, BorderLayout.CENTER);
+        var right = new JPanel(new BorderLayout(0, 2));
+        right.add(rightHeader, BorderLayout.NORTH);
+        right.add(sampleEditor(), BorderLayout.CENTER);
         sourceSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, right);
         sourceSplit.setResizeWeight(0.5);
         sourceSplit.setContinuousLayout(true);
@@ -205,16 +217,18 @@ final class CompareController {
     // Panels
     // ─────────────────────────────────────────────────────────────────────
 
-    private static JPanel titled(JLabel title, JComponent content) {
+    /** Header row above an editor: bold title (with the file name) on the left, tools on the right. */
+    private static JPanel header(JLabel title, JComponent tools) {
         title.setFont(title.getFont().deriveFont(Font.BOLD));
         title.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-        var p = new JPanel(new BorderLayout(0, 2));
-        p.add(title, BorderLayout.NORTH);
-        p.add(content, BorderLayout.CENTER);
+        var p = new JPanel(new BorderLayout());
+        p.add(title, BorderLayout.CENTER);
+        if (tools != null) p.add(tools, BorderLayout.EAST);
         return p;
     }
 
-    private JComponent samplePanel() {
+    /** Sample tools (in its header row): ✔ ✎ 📂 ⎘ ~ ✕. */
+    private JComponent sampleTools() {
         btnSampleStatus.setFocusable(false);
         btnSampleStatus.addActionListener(e -> { sampleSync.stop(); parseSample(); });
         var btnOpen = new JButton(new FolderIcon(18));
@@ -230,24 +244,47 @@ final class CompareController {
         tglValues.setSelected(showValues);
         tglValues.addActionListener(e -> { showValues = tglValues.isSelected(); recompute(); });
 
+        var close = FindReplacePanel.FlatButton.action("✕", Messages.get("compare.sample.close.tip"), host::exitCompare);
+
         var bar = new JToolBar();
         bar.setFloatable(false);
         bar.setRollover(true);
+        bar.setBorder(BorderFactory.createEmptyBorder());
+        bar.setOpaque(false);
         bar.add(btnSampleStatus);
         bar.addSeparator();
         bar.add(EditToggle.create(sampleArea, true, Messages.get("source.editable.tip"), null));
         bar.add(btnOpen);
         bar.add(btnCopy);
-        bar.add(Box.createHorizontalGlue());
+        bar.addSeparator();
         bar.add(tglValues);
+        bar.add(close);
+        return bar;
+    }
 
+    /** Sample editor; hovering a property offers "Locate" (and editing on right click), like the Pattern. */
+    private JComponent sampleEditor() {
+        sampleArea.setPopupMenu(null);
+        HoverActionMenu.install(sampleArea, (p, fixed) -> {
+            int off = TrioPanel.textOffsetAt(sampleArea, p);
+            var locate = off >= 0 && sampleEntry != null && sampleEntry.contains(off)
+                    ? List.of(new HoverActionMenu.Item(Messages.get("menu.locate"), HoverActionMenu.ICON_LOCATE, true,
+                            Messages.get("compare.locate.tip"), () -> locate(sampleEntry.pathAt(off))))
+                    : List.<HoverActionMenu.Item>of();
+            return fixed ? HoverActionMenu.concat(locate, HoverActionMenu.editItems(sampleArea)) : locate;
+        });
         var scroll = new RTextScrollPane(sampleArea);
         scroll.setLineNumbersEnabled(true);
         scroll.setFoldIndicatorEnabled(false);
-        var p = new JPanel(new BorderLayout());
-        p.add(bar, BorderLayout.NORTH);
-        p.add(scroll, BorderLayout.CENTER);
-        return p;
+        return scroll;
+    }
+
+    /** "Locate" from the Pattern text at an offset (null if not on a property). */
+    List<HoverActionMenu.Item> patternActionsAt(int off) {
+        var p = host.patternEntry();
+        if (off < 0 || p == null || !p.contains(off)) return List.of();
+        return List.of(new HoverActionMenu.Item(Messages.get("menu.locate"), HoverActionMenu.ICON_LOCATE, true,
+                Messages.get("compare.locate.tip"), () -> locate(p.pathAt(off))));
     }
 
     private JComponent jsonPanel() {
@@ -287,10 +324,62 @@ final class CompareController {
         var scroll = new RTextScrollPane(mergedEditor);
         scroll.setLineNumbersEnabled(true);
         scroll.setFoldIndicatorEnabled(true);
-        jsonPanel = new JPanel(new BorderLayout(0, JsonViewerPanel.TOOLBAR_GAP));
-        jsonPanel.add(bar, BorderLayout.NORTH);
-        jsonPanel.add(scroll, BorderLayout.CENTER);
+        mergedEditor.setLocator(this::locate);
+        var comparison = new JPanel(new BorderLayout(0, JsonViewerPanel.TOOLBAR_GAP));
+        comparison.add(bar, BorderLayout.NORTH);
+        comparison.add(scroll, BorderLayout.CENTER);
+
+        // View selector: the comparison (view only) or the real JSON of each side (edit, validate, save…)
+        jsonViews.add(comparison, View.COMPARISON.name());
+        var selector = new JToolBar();
+        selector.setFloatable(false);
+        selector.setBorder(BorderFactory.createEmptyBorder(0, 0, 2, 0));
+        var group = new ButtonGroup();
+        for (var v : View.values()) {
+            var b = FindReplacePanel.FlatButton.toggle(Messages.get("compare.view." + v.name().toLowerCase()),
+                    Messages.get("compare.view." + v.name().toLowerCase() + ".tip"));
+            b.setSelected(v == View.COMPARISON);
+            b.addActionListener(e -> showView(v));
+            group.add(b);
+            selector.add(b);
+        }
+        jsonPanel = new JPanel(new BorderLayout());
+        jsonPanel.add(selector, BorderLayout.NORTH);
+        jsonPanel.add(jsonViews, BorderLayout.CENTER);
         return jsonPanel;
+    }
+
+    private enum View { COMPARISON, PATTERN, SAMPLE }
+
+    private final JPanel jsonViews = new JPanel(new CardLayout());
+    private View view = View.COMPARISON;
+    private JsonViewerPanel patternJson, sampleJson;
+
+    private void showView(View v) {
+        view = v;
+        if (v == View.PATTERN) patternJson = sideJson(patternJson, host.patternEntry(), "-pattern", View.PATTERN);
+        if (v == View.SAMPLE) sampleJson = sideJson(sampleJson, sampleEntry, "-sample", View.SAMPLE);
+        ((CardLayout) jsonViews.getLayout()).show(jsonViews, v.name());
+    }
+
+    /** Real JSON of one side (rebuilt from the text unless edited by hand). */
+    private JsonViewerPanel sideJson(JsonViewerPanel current, ParsedEntry entry, String suffix, View v) {
+        String json;
+        try {
+            json = entry == null ? "" : JsonSerializer.toPrettyJson(entry.parsed());
+        } catch (IOException ex) {
+            json = "";
+        }
+        if (current != null && current.isModified()) return current;
+        if (current != null) {
+            current.updateJson(json);
+            return current;
+        }
+        var panel = new JsonViewerPanel(json, this::locate);
+        panel.setStatusSink(host::status);
+        panel.setProposedFile(() -> proposal(suffix));
+        jsonViews.add(panel, v.name());
+        return panel;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -446,6 +535,10 @@ final class CompareController {
             }
         }
 
+        // Real JSON views of each side, if open
+        if (patternJson != null) patternJson = sideJson(patternJson, pattern, "-pattern", View.PATTERN);
+        if (sampleJson != null) sampleJson = sideJson(sampleJson, sample, "-sample", View.SAMPLE);
+
         // Summary
         var counts = new EnumMap<Status, Integer>(Status.class);
         count(diff, counts, true);
@@ -600,6 +693,7 @@ final class CompareController {
     }
 
     void locate(List<Object> path) {
+        selectInTree(path);
         select(host.patternArea(), host.patternEntry(), path);
         select(sampleArea, sampleEntry, path);
         int off = JsonPath.offsetOf(mergedEditor.getText(), path);
@@ -608,6 +702,19 @@ final class CompareController {
             SwingUtilities.invokeLater(() -> Centering.on(mergedEditor, off));
         }
         host.status(Messages.get("status.located", JsonPath.format(path)));
+    }
+
+    private void selectInTree(List<Object> path) {
+        var root = (DefaultMutableTreeNode) host.tree().getModel().getRoot();
+        for (var en = root.preorderEnumeration(); en.hasMoreElements(); ) {
+            var n = (DefaultMutableTreeNode) en.nextElement();
+            if (n.getUserObject() instanceof DiffTreeValue d && d.path().equals(path)) {
+                var tp = new TreePath(n.getPath());
+                host.tree().setSelectionPath(tp);
+                host.tree().scrollPathToVisible(tp);
+                return;
+            }
+        }
     }
 
     private static void select(JTextComponent area, ParsedEntry entry, List<Object> path) {
@@ -627,19 +734,21 @@ final class CompareController {
     private void save(ParsedEntry entry, String suffix) {
         if (entry == null) return;
         try {
-            String json = JsonSerializer.toPrettyJson(entry.parsed());
-            File base = suffix.equals("-sample") && sampleFile != null
-                    ? new File(host.proposedJsonFile().getParentFile(), sampleFile.getFileName().toString())
-                    : host.proposedJsonFile();
-            String name = base.getName();
-            int dot = name.lastIndexOf('.');
-            String ext = Config.string("json.extension");
-            File proposal = new File(base.getParentFile(), (dot > 0 ? name.substring(0, dot) : name) + suffix + ext);
             JsonViewerPanel.saveToFile(sampleArea, Messages.get(suffix.equals("-sample") ? "compare.saveSample" : "compare.savePattern"),
-                    json, proposal, host::status);
+                    JsonSerializer.toPrettyJson(entry.parsed()), proposal(suffix), host::status);
         } catch (IOException ex) {
             ErrorDialog.show(sampleArea, Messages.get("json.save.error"), ex);
         }
+    }
+
+    /** Proposed file: the Pattern's (or the Sample's loaded file) name + "-pattern"/"-sample" + .json. */
+    private File proposal(String suffix) {
+        File base = suffix.equals("-sample") && sampleFile != null
+                ? new File(host.proposedJsonFile().getParentFile(), sampleFile.getFileName().toString())
+                : host.proposedJsonFile();
+        String name = base.getName();
+        int dot = name.lastIndexOf('.');
+        return new File(base.getParentFile(), (dot > 0 ? name.substring(0, dot) : name) + suffix + Config.string("json.extension"));
     }
 
     /** The current comparison (for the tests). */

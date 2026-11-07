@@ -46,7 +46,7 @@ class FlowsSpec extends UiSpec {
 
         then:
         waitInSync(main())
-        onEdt { main().@lblLanguage.visible && main().@lblLanguage.text == 'Java · Kotlin' }
+        onEdt { main().@lblLanguage.visible && main().@lblLanguage.icon != null && main().@lblLanguage.toolTipText.contains('Java, Kotlin') }
         onEdt {
             def treeBar = findAll(main(), JToolBar).find { !findAll(it, TreeSearchBar).isEmpty() }
             def jsonBars = main().@jsonPanel.@bars
@@ -716,6 +716,55 @@ class FlowsSpec extends UiSpec {
         worst < 1000
     }
 
+    def "compare UI: aligned editors, Locate from the JSON, real JSON views, ✕ closes the Sample"() {
+        given:
+        setText(main(), 'P INFO Order(id=7, customer=Ann)')
+        waitInSync(main())
+        def toggle = onEdt { findAll(trios().getTabComponentAt(0) as Container, JToggleButton)[0] }
+        onEdt { toggle.doClick() }
+        def ctl = onEdt { main().@compare }
+        onEdt { ctl.setSampleText('S INFO Order(id=8, customer=Ann)') }
+        eventually.eventually { assert onEdt { ctl.lastDiff() } != null }
+
+        expect: 'Pattern and Sample editors start at the same height'
+        onEdt {
+            def pScroll = SwingUtilities.getAncestorOfClass(JScrollPane, main().@textArea)
+            def sScroll = SwingUtilities.getAncestorOfClass(JScrollPane, ctl.sampleArea())
+            SwingUtilities.convertPoint(pScroll.parent, pScroll.location, frame).y ==
+                    SwingUtilities.convertPoint(sScroll.parent, sScroll.location, frame).y
+        }
+
+        when: 'Locate from the comparison JSON'
+        onEdt { ctl.locate(['id']) }
+
+        then: 'tree, Pattern and Sample select "id"'
+        onEdt { tree(main()).selectionPath.lastPathComponent.toString() }.contains('id')
+        onEdt { main().@textArea.selectedText }.startsWith('id=7')
+        onEdt { ctl.sampleArea().selectedText }.startsWith('id=8')
+
+        when: 'the Pattern view of the JSON'
+        onEdt { ctl.showView(Enum.valueOf(ctl.class.classLoader.loadClass('com.logobjectjson.ui.CompareController$View'), 'PATTERN')) }
+
+        then: 'a full JSON panel with edit (✎) and validate (✔)'
+        onEdt { ctl.@patternJson != null && ctl.@patternJson.showing }
+        onEdt { findAll(ctl.@patternJson, JToggleButton).any { it.toolTipText == Messages.get('json.editable.tip') } }
+        onEdt { ctl.@patternJson.json }.contains('"id": 7')
+
+        when: '✕ on the Sample title'
+        onEdt { findAll(ctl.sampleArea().rootPane, JButton).find { it.toolTipText == Messages.get('compare.sample.close.tip') }.doClick() }
+
+        then: 'the comparison closes and ⇄ is released'
+        !onEdt { main().isComparing() }
+        !onEdt { toggle.selected }
+    }
+
+    def "search arrows are compact (↑ ↓ next to each other)"() {
+        expect:
+        onEdt {
+            findAll(main(), JButton).findAll { it.text in ['↑', '↓'] }.every { it.preferredSize.width <= 24 }
+        }
+    }
+
     def "tree search has the editors' options: Cc, W, .*, 'No results' and history"() {
         given:
         setText(main(), LOG)
@@ -723,7 +772,7 @@ class FlowsSpec extends UiSpec {
         def bar = onEdt { findAll(main(), TreeSearchBar)[0] }
 
         expect:
-        onEdt { bar.@lblStatus.text } == Messages.get('search.noResults')
+        onEdt { bar.@lblStatus.toolTipText } == Messages.get('search.noResults')
 
         when: 'regex + whole word'
         onEdt {
@@ -746,7 +795,7 @@ class FlowsSpec extends UiSpec {
         onEdt { bar.@txt.text = 'zzz-none' }
 
         then:
-        eventually.eventually { assert onEdt { bar.@lblStatus.text } == Messages.get('search.noResults') }
+        eventually.eventually { assert onEdt { bar.@lblStatus.toolTipText } == Messages.get('search.noResults') }
     }
 
     def "stress: with a ~250,000 character line the UI keeps responding"() {
