@@ -126,9 +126,6 @@ public class TrioPanel extends JPanel {
     private Path loadedFile;
     private String loadedText;
 
-    /** Point of the last click in the source editor (context menu). */
-    private Point lastSourceClick;
-
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
     // ─────────────────────────────────────────────────────────────────────────
@@ -139,26 +136,6 @@ public class TrioPanel extends JPanel {
 
         // Source editor (pasted text or loaded file)
         textArea = new RSyntaxTextArea(12, 70) {
-            private static final String MENU_MARK = "source.locate";
-
-            @Override
-            protected void configurePopupMenu(JPopupMenu popupMenu) {
-                super.configurePopupMenu(popupMenu);
-                for (int i = popupMenu.getComponentCount() - 1; i >= 0; i--) {
-                    if (Boolean.TRUE.equals(((JComponent) popupMenu.getComponent(i)).getClientProperty(MENU_MARK))) {
-                        popupMenu.remove(i);
-                    }
-                }
-                int off = lastSourceClick != null ? viewToModel2D(lastSourceClick) : getCaretPosition();
-                var locate = new JMenuItem(Messages.get("menu.locateInTree"));
-                locate.addActionListener(e -> locateFromSource(off));
-                var sep = new JPopupMenu.Separator();
-                locate.putClientProperty(MENU_MARK, true);
-                sep.putClientProperty(MENU_MARK, true);
-                popupMenu.insert(sep, 0);
-                popupMenu.insert(locate, 0);
-            }
-
             /** Gray placeholder text while the editor is empty. */
             @Override
             protected void paintComponent(Graphics g) {
@@ -184,9 +161,6 @@ public class TrioPanel extends JPanel {
                 }
             }
         };
-        textArea.addMouseListener(new MouseAdapter() {
-            @Override public void mousePressed(MouseEvent e) { lastSourceClick = e.getPoint(); }
-        });
         textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_NONE);
         // No line wrap: with huge lines (200k+ character logs on a single line)
         // RSyntaxTextArea's wrapping is quadratic and freezes the UI.
@@ -194,8 +168,9 @@ public class TrioPanel extends JPanel {
         textArea.setHighlightCurrentLine(false);
         textArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         sourceSearch = new FindReplacePanel(textArea);
-        sourceSearch.addAction(Messages.get("json.toTree"), Messages.get("source.toTree.tip"),
-                () -> locateFromSource(textArea.getSelectionStart()));
+        // A single context menu: "Locate in the tree" on hover over a property; + editing on right click
+        textArea.setPopupMenu(null);
+        HoverActionMenu.install(textArea, this::sourceActionsAt);
 
         btnOpen = new JButton(new FolderIcon(18));
         btnOpen.setToolTipText(Messages.get("source.open.tip"));
@@ -263,7 +238,7 @@ public class TrioPanel extends JPanel {
         });
 
         // Node actions: translucent menu on hover, fixed and interactive on right click
-        var nodeMenu = HoverActionMenu.install(resultTree, this::nodeActionsAt);
+        var nodeMenu = HoverActionMenu.install(resultTree, (p, fixed) -> nodeActionsAt(p));
         resultTree.addMouseListener(new MouseAdapter() {
             @Override public void mousePressed(MouseEvent e)  { selectOnPopup(e); }
             @Override public void mouseReleased(MouseEvent e) { selectOnPopup(e); }
@@ -314,6 +289,39 @@ public class TrioPanel extends JPanel {
                         ICON_JSON, target != null, null, () -> locateInJson(target, node)),
                 new HoverActionMenu.Item(Messages.get("menu.locateInText"), ICON_TEXT,
                         instantiatedText != null, null, () -> locateInSource(node, List.of())));
+    }
+
+    private static final Icon ICON_TREE = new HoverActionMenu.GlyphIcon("⬡", new Color(45, 105, 200));
+
+    /**
+     * Source editor actions at p: "Locate in the tree" when p is over a property of
+     * the instantiated object (also offered on right click while out of sync);
+     * editing actions on right click.
+     */
+    private List<HoverActionMenu.Item> sourceActionsAt(Point p, boolean fixed) {
+        int off = textOffsetAt(textArea, p);
+        boolean synced = currentEntries != null && textArea.getText().equals(instantiatedText);
+        boolean onObject = off >= 0 && synced && currentEntries.stream().anyMatch(en -> en.contains(off));
+        var locate = onObject || (fixed && off >= 0 && !synced && textArea.getDocument().getLength() > 0)
+                ? List.of(new HoverActionMenu.Item(Messages.get("menu.locateInTree"), ICON_TREE, true, null,
+                        () -> locateFromSource(off)))
+                : List.<HoverActionMenu.Item>of();
+        return fixed ? HoverActionMenu.concat(locate, HoverActionMenu.editItems(textArea)) : locate;
+    }
+
+    /** Text offset under p, or -1 if p is beyond the end of its line. */
+    static int textOffsetAt(JTextArea area, Point p) {
+        int off = area.viewToModel2D(p);
+        if (off < 0) return -1;
+        try {
+            int line = area.getLineOfOffset(off);
+            int end = area.getLineEndOffset(line);
+            var r = area.modelToView2D(Math.max(area.getLineStartOffset(line), end - 1));
+            if (r != null && p.x > r.getX() + r.getWidth() + 8) return -1;
+        } catch (BadLocationException ex) {
+            return -1;
+        }
+        return off;
     }
 
     /** A right click also selects the node it was made on. */

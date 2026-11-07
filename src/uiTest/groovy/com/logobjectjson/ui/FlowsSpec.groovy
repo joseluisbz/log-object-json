@@ -8,6 +8,7 @@ import spock.lang.TempDir
 import javax.swing.*
 import java.awt.Point
 import java.awt.Robot
+import java.awt.Container
 import javax.swing.tree.TreePath
 import java.nio.file.Files
 import java.nio.file.Path
@@ -340,6 +341,88 @@ class FlowsSpec extends UiSpec {
 
         then:
         eventually.eventually { assert menu() == null }
+    }
+
+    def "source text: hover over a property offers 'Locate in the tree'; right click adds editing actions"() {
+        given:
+        setText(main(), LOG)
+        waitInSync(main())
+        def area = main().@textArea
+        Point at = onEdt {
+            def r = area.modelToView2D(LOG.indexOf('prod=B') + 2)
+            def p = new Point((int) r.x, (int) (r.y + r.height / 2))
+            SwingUtilities.convertPointToScreen(p, area)
+            p
+        }
+        def robot = new Robot()
+        def menu = { -> onEdt { frame.layeredPane.getComponentsInLayer(JLayeredPane.POPUP_LAYER).find { it instanceof HoverActionMenu } } }
+        def texts = { -> onEdt { menu().@items*.text() } }
+
+        when: 'hover over the property'
+        robot.mouseMove(at.@x, at.@y)
+        robot.mouseMove(at.@x + 1, at.@y)
+        robot.waitForIdle()
+
+        then: 'only the specific action, translucent'
+        eventually.eventually { assert menu() != null && onEdt { menu().@state.toString() } == 'GHOST' }
+        texts() == [Messages.get('menu.locateInTree')]
+
+        when: 'right click'
+        robot.mousePress(java.awt.event.InputEvent.BUTTON3_DOWN_MASK)
+        robot.mouseRelease(java.awt.event.InputEvent.BUTTON3_DOWN_MASK)
+        robot.waitForIdle()
+
+        then: 'fixed, with the editing actions too'
+        eventually.eventually { assert onEdt { menu().@state.toString() } == 'FIXED' }
+        texts() == [Messages.get('menu.locateInTree'), Messages.get('edit.undo'), Messages.get('edit.cut'),
+                    Messages.get('edit.copy'), Messages.get('edit.paste'), Messages.get('edit.selectAll')]
+
+        when: 'choose "Locate in the tree"'
+        onEdt { menu().@items[0].action().run(); menu().hideMenu() }
+
+        then:
+        eventually.eventually {
+            assert onEdt { tree(main()).selectionPath?.lastPathComponent?.toString() } == 'prod  =  "B-22/x"'
+        }
+    }
+
+    def "JSON: replace becomes available when 'Editable' is checked"() {
+        given:
+        setText(main(), LOG)
+        waitInSync(main())
+        def panel = onEdt { main().@jsonPanel }
+        def chk = onEdt { findAll(panel, JCheckBox).find { it.text == Messages.get('json.editable') } }
+        def fr = onEdt { findAll(panel, JComponent).find { it.getClass().name.endsWith('FlatButton') && it.text == '›' } }
+
+        expect:
+        !onEdt { fr.enabled }
+
+        when:
+        onEdt { chk.doClick() }
+
+        then:
+        onEdt { fr.enabled }
+
+        when: 'open the replace row'
+        onEdt { fr.doClick() }
+        Thread.sleep(300)
+        def btn = onEdt { findAll(panel, JButton).find { it.text == Messages.get('search.replaceAll') } }
+
+        then: 'its buttons are enabled and actually visible (not clipped by the toolbar)'
+        onEdt { btn.enabled && btn.showing }
+        onEdt {
+            def r = SwingUtilities.convertRectangle(btn.parent, btn.bounds, panel)
+            r.height > 0 && r.y >= 0 && r.y + r.height <= panel.height && btn.visibleRect.height == btn.height
+        }
+    }
+
+    static List findAll(Container c, Class type) {
+        def out = []
+        c.components.each { k ->
+            if (type.isInstance(k)) out << k
+            if (k instanceof Container) out.addAll(findAll(k, type))
+        }
+        out
     }
 
     def "stress: with a ~250,000 character line the UI keeps responding"() {

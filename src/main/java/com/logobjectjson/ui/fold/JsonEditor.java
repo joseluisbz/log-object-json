@@ -1,6 +1,7 @@
 package com.logobjectjson.ui.fold;
 
 import com.logobjectjson.Messages;
+import com.logobjectjson.ui.HoverActionMenu;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rsyntaxtextarea.folding.Fold;
@@ -37,7 +38,8 @@ public class JsonEditor extends RSyntaxTextArea {
     private static final Color BOX_BG     = new Color(232, 238, 248);
     private static final Color BOX_BORDER = new Color(160, 180, 215);
     private static final Color BOX_DOTS   = new Color(70, 100, 160);
-    private static final String MENU_MARK = "json.path";
+    private static final Icon ICON_TREE = new HoverActionMenu.GlyphIcon("⬡", new Color(45, 105, 200));
+    private static final Icon ICON_COPY = new HoverActionMenu.GlyphIcon("⎘", new Color(120, 120, 120));
 
     /** "⋯" boxes painted in the last repaint → fold they expand. */
     private final Map<Rectangle, Fold> boxes = new LinkedHashMap<>();
@@ -46,8 +48,6 @@ public class JsonEditor extends RSyntaxTextArea {
     private Consumer<List<Object>> locator;
     /** Path format for the tooltip (allows marking Map keys with "<,>"). */
     private Function<List<Object>, String> tooltipFormatter = JsonPath::format;
-    /** Point of the last click (for the context menu). */
-    private Point lastClick;
 
     public JsonEditor(String text) {
         super(text);
@@ -57,7 +57,6 @@ public class JsonEditor extends RSyntaxTextArea {
 
         var mouse = new MouseAdapter() {
             @Override public void mousePressed(MouseEvent e) {
-                lastClick = e.getPoint();
                 Fold f = boxAt(e.getPoint());
                 if (f != null) {
                     f.setCollapsed(false);
@@ -72,6 +71,26 @@ public class JsonEditor extends RSyntaxTextArea {
         };
         addMouseListener(mouse);
         addMouseMotionListener(mouse);
+
+        // A single context menu: path actions on hover over a key/value; + editing on right click
+        setPopupMenu(null);
+        HoverActionMenu.install(this, this::actionsAt);
+    }
+
+    /** "Locate in the tree" / "Copy path" over a key or value; editing actions on right click. */
+    private List<HoverActionMenu.Item> actionsAt(Point p, boolean fixed) {
+        List<Object> path = boxAt(p) != null ? null : pathAt(p);
+        var specific = new ArrayList<HoverActionMenu.Item>();
+        if (path != null) {
+            String text = JsonPath.format(path);
+            if (locator != null) {
+                specific.add(new HoverActionMenu.Item(Messages.get("menu.locateInTree"), ICON_TREE, true, text,
+                        () -> locator.accept(path)));
+            }
+            specific.add(new HoverActionMenu.Item(Messages.get("json.copyPath"), ICON_COPY, true, text,
+                    () -> Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null)));
+        }
+        return fixed ? HoverActionMenu.concat(specific, HoverActionMenu.editItems(this)) : specific;
     }
 
     public void setTooltipFormatter(Function<List<Object>, String> f) {
@@ -104,33 +123,6 @@ public class JsonEditor extends RSyntaxTextArea {
         if (boxAt(e.getPoint()) != null) return Messages.get("json.expand");
         List<Object> path = pathAt(e.getPoint());
         return path != null ? tooltipFormatter.apply(path) : super.getToolTipText(e);
-    }
-
-    @Override
-    protected void configurePopupMenu(JPopupMenu popupMenu) {
-        super.configurePopupMenu(popupMenu);
-        // Remove items added by a previous popup
-        for (int i = popupMenu.getComponentCount() - 1; i >= 0; i--) {
-            if (Boolean.TRUE.equals(((JComponent) popupMenu.getComponent(i)).getClientProperty(MENU_MARK))) {
-                popupMenu.remove(i);
-            }
-        }
-        List<Object> path = pathAt(lastClick);
-        String text = path != null ? JsonPath.format(path) : null;
-
-        var sep = new JPopupMenu.Separator();
-        var locate = new JMenuItem(Messages.get("menu.locateInTree") + (text != null ? "  (" + text + ")" : ""));
-        locate.setEnabled(path != null && locator != null);
-        locate.addActionListener(e -> locator.accept(path));
-        var copy = new JMenuItem(Messages.get("json.copyPath"));
-        copy.setEnabled(path != null);
-        copy.addActionListener(e -> Toolkit.getDefaultToolkit().getSystemClipboard()
-                .setContents(new StringSelection(text), null));
-
-        for (JComponent c : List.of(sep, locate, copy)) c.putClientProperty(MENU_MARK, true);
-        popupMenu.insert(copy, 0);
-        popupMenu.insert(locate, 0);
-        popupMenu.insert(sep, 2);
     }
 
     private Fold boxAt(Point p) {

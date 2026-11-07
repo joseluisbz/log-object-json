@@ -106,13 +106,6 @@ public class JsonViewerPanel extends JPanel {
 
         // Find/Replace (Ctrl+F / Ctrl+H); replace only in Editable mode
         var findReplace = new FindReplacePanel(editor);
-        if (locator != null) {
-            findReplace.addAction(Messages.get("json.toTree"), Messages.get("json.toTree.tip"), () -> {
-                var path = JsonPath.pathAt(editor.getText(), editor.getSelectionStart());
-                if (path != null) locator.accept(path);
-                else lblInfo.setText(Messages.get("json.notOnKey"));
-            });
-        }
 
         // One toolbar: [Editable] | [Validate] [Copy] [Save] | search | info
         var bar = new JToolBar();

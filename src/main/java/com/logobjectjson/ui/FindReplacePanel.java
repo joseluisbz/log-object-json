@@ -32,7 +32,7 @@ import java.util.regex.PatternSyntaxException;
  * history for both the search and the replacement.
  *
  *   ┌───┬───────────────────────────────────────────┬─────────────────────────┐
- *   │ › │ [🔍▾ find…                    Cc  W  .* ] ⋮ │ 3 of 12   ↑  ↓   → Tree  │
+ *   │ › │ [🔍▾ find…                    Cc  W  .* ] ⋮ │ 3 of 12   ↑  ↓           │
  *   │   │ [🔍▾ replace…                           ]   │ [Replace] [Replace all] │ ← [›] or Ctrl+H
  *   └───┴───────────────────────────────────────────┴─────────────────────────┘
  *
@@ -111,19 +111,6 @@ public class FindReplacePanel {
         registerEvents();
         updateReplaceAvailability();
         replaceRow.setVisible(false);
-    }
-
-    /**
-     * Adds an action button at the end of the find row (e.g. "→ Tree").
-     * The action usually works on the match selected in the editor.
-     */
-    public JButton addAction(String text, String tip, Runnable action) {
-        var b = FlatButton.action(text, tip, action);
-        fixed(b);
-        int idx = findRow.getComponentCount() - 1;   // before the trailing glue
-        findRow.add(javax.swing.Box.createHorizontalStrut(6), idx);
-        findRow.add(b, idx + 1);
-        return b;
     }
 
     /** The whole find/replace widget (to insert it into a toolbar or panel). */

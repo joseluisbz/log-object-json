@@ -1,6 +1,8 @@
 package com.logobjectjson.ui;
 
 import com.logobjectjson.Config;
+import com.logobjectjson.Messages;
+import org.fife.ui.rtextarea.RTextArea;
 
 import javax.swing.*;
 import java.awt.*;
@@ -31,10 +33,14 @@ public class HoverActionMenu extends JComponent {
     /** One option: text, icon, whether it applies here, and what it does. */
     public record Item(String text, Icon icon, boolean enabled, String tooltip, Runnable action) { }
 
-    /** Options for a point of the host (host coordinates); empty = nothing there. */
+    /**
+     * Options for a point of the host (host coordinates); empty = nothing there.
+     * {@code fixed} is false while following the cursor (offer only what is specific
+     * to that point) and true on a right click (may add general actions, e.g. editing).
+     */
     @FunctionalInterface
     public interface Provider {
-        List<Item> itemsAt(Point p);
+        List<Item> itemsAt(Point p, boolean fixed);
     }
 
     private enum State { HIDDEN, GHOST, FIXED }
@@ -119,7 +125,7 @@ public class HoverActionMenu extends JComponent {
     /** GHOST: follows the cursor while it is over something with actions. */
     private void ghostAt(Point p) {
         if (state == State.FIXED) return;
-        var found = provider.itemsAt(p);
+        var found = provider.itemsAt(p, false);
         if (found == null || found.isEmpty()) {
             hideMenu();
             return;
@@ -141,7 +147,7 @@ public class HoverActionMenu extends JComponent {
 
     /** FIXED: frozen at p (host coordinates), opaque and interactive. */
     public void fixAt(Point p) {
-        var found = provider.itemsAt(p);
+        var found = provider.itemsAt(p, true);
         if (found == null || found.isEmpty()) {
             hideMenu();
             return;
@@ -313,6 +319,29 @@ public class HoverActionMenu extends JComponent {
         } finally {
             g2.dispose();
         }
+    }
+
+    /**
+     * Standard editing actions for a text editor (replace its own context menu,
+     * so there is a single menu): Undo, Cut, Copy, Paste, Select all.
+     */
+    public static List<Item> editItems(RTextArea editor) {
+        boolean editable = editor.isEditable() && editor.isEnabled();
+        boolean selection = editor.getSelectionStart() != editor.getSelectionEnd();
+        return List.of(
+                new Item(Messages.get("edit.undo"), null, editable && editor.canUndo(), null, editor::undoLastAction),
+                new Item(Messages.get("edit.cut"), null, editable && selection, null, editor::cut),
+                new Item(Messages.get("edit.copy"), null, selection, null, editor::copy),
+                new Item(Messages.get("edit.paste"), null, editable, null, editor::paste),
+                new Item(Messages.get("edit.selectAll"), null, editor.getDocument().getLength() > 0, null, editor::selectAll));
+    }
+
+    /** Joins item lists (e.g. specific actions + editing actions). */
+    @SafeVarargs
+    public static List<Item> concat(List<Item>... lists) {
+        var out = new java.util.ArrayList<Item>();
+        for (var l : lists) out.addAll(l);
+        return out;
     }
 
     /** Simple drawn icon: a glyph in a color (keeps the menu free of image files). */
