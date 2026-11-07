@@ -35,7 +35,8 @@ public record Dialect(
         boolean positional,
         boolean tuples,
         boolean sets,
-        boolean embeddedJson) {
+        boolean embeddedJson,
+        List<String> languages) {
 
     public boolean isSeparator(char c) { return separators.indexOf(c) >= 0; }
 
@@ -139,7 +140,8 @@ public record Dialect(
                 bool(n, "positional", base != null && base.positional()),
                 bool(n, "tuples", base != null && base.tuples()),
                 bool(n, "sets", base != null && base.sets()),
-                bool(n, "embeddedJson", base != null && base.embeddedJson()));
+                bool(n, "embeddedJson", base != null && base.embeddedJson()),
+                list(n, "languages", base == null ? List.of(name) : base.languages()));
     }
 
     private static String text(JsonNode n, String field, String fallback) {
@@ -150,6 +152,15 @@ public record Dialect(
     private static boolean bool(JsonNode n, String field, boolean fallback) {
         JsonNode v = n.get(field);
         return v == null || v.isNull() ? fallback : v.asBoolean();
+    }
+
+    private static List<String> list(JsonNode n, String field, List<String> fallback) {
+        JsonNode v = n.get(field);
+        if (v == null || v.isNull()) return fallback;
+        var out = new ArrayList<String>();
+        if (v.isArray()) v.forEach(x -> out.add(x.asText()));
+        else out.add(v.asText());
+        return List.copyOf(out);
     }
 
     private static Set<String> set(JsonNode n, String field, Set<String> fallback) {

@@ -50,6 +50,13 @@ class DialectsSpec extends Specification {
         Dialect.byName('python').nulls() == ['None'] as Set
     }
 
+    def "each dialect lists the languages that print that way (missing = its own name)"() {
+        expect:
+        Dialect.byName('java').languages() == ['Java', 'Kotlin']
+        Dialect.byName('rust').languages() == ['Rust']
+        Dialect.actives().every { !it.languages().isEmpty() }
+    }
+
     def "a user file replaces, adds and disables dialects by name"() {
         given:
         def own = folder.resolve('my-dialects.yml')
@@ -78,6 +85,7 @@ dialects:
         Dialect.byName('python').nulls() == ['None', 'nothing'] as Set
         Dialect.byName('python').quotes() == "'\""            // inherited from the original
         !Dialect.byName('rust').active()
+        Dialect.byName('kotlin').languages() == ['kotlin']                // default: its own name
         (parse('P(x=nothing)', 'python') as DynamicObject).properties() == [x: null]
     }
 

@@ -23,6 +23,8 @@
 #   tuples                   (1, 2) without a name → list
 #   sets                     {1, 2} without separators → list
 #   embeddedJson             {"k": v} is marked as a JSON object
+#   languages                languages that print objects this way (shown in the UI as a hint;
+#                            the syntax cannot tell them apart)
 
 dialects:
 
@@ -40,6 +42,7 @@ dialects:
     tuples: false
     sets: false
     embeddedJson: true
+    languages: [ "Java", "Kotlin" ]
 
   - name: csharp                 # record.ToString(): Person { Name = Ann, Age = 3 }; anonymous { A = 1 }
     active: true
@@ -55,6 +58,7 @@ dialects:
     tuples: true                 # ValueTuple: (1, Ann)
     sets: false
     embeddedJson: true
+    languages: [ "C#" ]
 
   - name: python                 # repr(): dataclass/pydantic Person(name='Ann', active=True, x=None); dict/list/tuple/set
     active: true
@@ -70,6 +74,7 @@ dialects:
     tuples: true
     sets: true
     embeddedJson: false
+    languages: [ "Python" ]
 
   - name: rust                   # {:?} Debug: Person { name: "Ann", extra: None, v: Some(5) }; Point(1, 2)
     active: true
@@ -85,3 +90,4 @@ dialects:
     tuples: true
     sets: false
     embeddedJson: false
+    languages: [ "Rust" ]

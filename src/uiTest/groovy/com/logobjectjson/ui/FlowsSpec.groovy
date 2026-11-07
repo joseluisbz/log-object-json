@@ -40,6 +40,27 @@ class FlowsSpec extends UiSpec {
         sessionTitle() == Messages.get('trio.pastedText')
     }
 
+    def "the recognized languages are shown next to the sync status; tree and JSON toolbars are aligned"() {
+        when:
+        setText(main(), LOG)
+
+        then:
+        waitInSync(main())
+        onEdt { main().@lblLanguage.visible && main().@lblLanguage.text == 'Java · Kotlin' }
+        onEdt {
+            def treeBar = findAll(main(), JToolBar).find { !findAll(it, TreeSearchBar).isEmpty() }
+            def jsonBars = main().@jsonPanel.@bars
+            treeBar.height == jsonBars.height
+        }
+
+        when: 'the text stops being a valid object'
+        setText(main(), 'no objects here')
+
+        then:
+        eventually.eventually { assert sync(main()).startsWith('⚠') }
+        !onEdt { main().@lblLanguage.visible }
+    }
+
     def "opening a file: title = file name; tree and JSON ready"() {
         given:
         def file = folder.resolve('sample.log')

@@ -46,6 +46,8 @@ public class JsonViewerPanel extends JPanel {
     /** true while the text is set from code (does not count as a user edit). */
     private boolean loading;
     private final JLabel lblInfo = new JLabel(" ");
+    /** Toolbars row (main toolbar + Wrap). */
+    private JPanel bars;
 
     public JsonViewerPanel(String json) {
         this(json, null);
@@ -139,7 +141,7 @@ public class JsonViewerPanel extends JPanel {
         rightBar.setRollover(true);
         rightBar.add(tglWrap);
 
-        var bars = new JPanel(new BorderLayout());
+        bars = new JPanel(new BorderLayout());
         bars.add(bar, BorderLayout.CENTER);
         bars.add(rightBar, BorderLayout.EAST);
 
@@ -175,6 +177,11 @@ public class JsonViewerPanel extends JPanel {
         SwingUtilities.invokeLater(() -> Centering.on(editor, off));
         lblInfo.setText(path.isEmpty() ? Messages.get("json.root") : "→ " + JsonPath.format(path));
         return true;
+    }
+
+    /** Height of the toolbars row (to align neighboring toolbars with it). */
+    public int toolbarHeight() {
+        return bars.getPreferredSize().height;
     }
 
     /** Path tooltip format (e.g. with "<,>" marks on Map keys). */

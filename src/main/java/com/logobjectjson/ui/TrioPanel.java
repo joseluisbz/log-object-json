@@ -94,6 +94,8 @@ public class TrioPanel extends JPanel {
 
     /** Text → tree/JSON sync status indicator (✔ / ⏳ / ⚠). */
     private final JLabel lblSync;
+    /** Languages whose printing syntax matches the object (hint, from dialects.yml). */
+    private final JLabel lblLanguage = new LanguageBadge();
 
     /** Automatic re-instantiation after typing stops. */
     private final Timer autoInstantiate = new Timer(Config.integer("sync.delayMs"), e -> instantiateIfChanged());
@@ -603,6 +605,7 @@ public class TrioPanel extends JPanel {
         bar.setFloatable(false);
         bar.setRollover(true);
         bar.add(lblSync);
+        bar.add(lblLanguage);
         bar.addSeparator();
         bar.add(btnOpen);
         bar.add(lblFile);
@@ -625,7 +628,17 @@ public class TrioPanel extends JPanel {
     private JPanel resultPanel() {
         var treePanel = new JPanel(new BorderLayout());
         treePanel.setBorder(BorderFactory.createTitledBorder(Messages.get("tree.title")));
-        treePanel.add(new TreeSearchBar(Messages.get("treeSearch.placeholder"), this::searchTree), BorderLayout.NORTH);
+        // The tree's search bar is as tall as the JSON toolbar next to it (aligned rows)
+        var treeBar = new JToolBar() {
+            @Override public Dimension getPreferredSize() {
+                var d = super.getPreferredSize();
+                return new Dimension(d.width, Math.max(d.height, placeholderJson.toolbarHeight()));
+            }
+        };
+        treeBar.setFloatable(false);
+        treeBar.setRollover(true);
+        treeBar.add(new TreeSearchBar(Messages.get("treeSearch.placeholder"), this::searchTree));
+        treePanel.add(treeBar, BorderLayout.NORTH);
         treePanel.add(new JScrollPane(resultTree), BorderLayout.CENTER);
 
         var jsonBox = new JPanel(new BorderLayout());
@@ -780,9 +793,45 @@ public class TrioPanel extends JPanel {
     }
 
     private void sync(String text, String tip) {
+        lblLanguage.setVisible(false);          // shown again only after a successful sync
         lblSync.setText(text);
         lblSync.setToolTipText(tip);
         lblSync.setForeground(text.startsWith("⚠") ? SYNC_ERROR : text.startsWith("✔") ? SYNC_OK : Color.DARK_GRAY);
+    }
+
+    /** Shows the languages of the recognized dialect (e.g. "Java · Kotlin") next to the sync status. */
+    private void showLanguages(String dialectName) {
+        if (dialectName == null) return;
+        var langs = com.logobjectjson.parser.Dialect.byName(dialectName).languages();
+        lblLanguage.setText(String.join(" · ", langs));
+        lblLanguage.setToolTipText(Messages.get("source.language.tip", String.join(", ", langs), dialectName));
+        lblLanguage.setVisible(true);
+    }
+
+    /** Small rounded badge (light background) for the recognized languages. */
+    private static final class LanguageBadge extends JLabel {
+        private static final Color BG = new Color(228, 236, 250);
+        private static final Color BORDER = new Color(150, 170, 210);
+
+        LanguageBadge() {
+            setVisible(false);
+            setForeground(new Color(40, 70, 140));
+            setFont(UIManager.getFont("Label.font").deriveFont(Font.BOLD));
+            setBorder(BorderFactory.createEmptyBorder(1, 8, 1, 8));
+        }
+
+        @Override protected void paintComponent(Graphics g) {
+            var g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            int h = Math.min(getHeight() - 2, getFontMetrics(getFont()).getHeight() + 4);
+            int y = (getHeight() - h) / 2;
+            g2.setColor(BG);
+            g2.fillRoundRect(0, y, getWidth() - 1, h, h, h);
+            g2.setColor(BORDER);
+            g2.drawRoundRect(0, y, getWidth() - 1, h, h, h);
+            g2.dispose();
+            super.paintComponent(g);
+        }
     }
 
     /** Line number (1-based) of a text offset. */
@@ -848,6 +897,7 @@ public class TrioPanel extends JPanel {
                     String detail = dialect == null ? Messages.get("status.instantiated")
                             : Messages.get("status.instantiated.dialect", dialect);
                     sync(Messages.get("sync.ok"), detail);
+                    showLanguages(dialect);
                     lblStatus.setText("✔  " + detail);
                 } catch (Exception ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
