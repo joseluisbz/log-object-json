@@ -561,7 +561,7 @@ public class FindReplacePanel {
         return c;
     }
 
-    private static void applyFixed(JComponent c) {
+    static void applyFixed(JComponent c) {
         var d = c.getPreferredSize();
         d = new Dimension(d.width + 2, d.height);   // margin: the border may vary
         c.setPreferredSize(d);

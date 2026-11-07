@@ -121,6 +121,19 @@ public class TreeSearchBar extends JPanel {
         add(btnNext);
     }
 
+    /** Fixed widths for the option/arrow buttons, once the final fonts are known (no "…" truncation). */
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        for (var b : List.of(tglCase, tglWord, tglRegex)) {
+            b.setPreferredSize(null);
+            b.setMinimumSize(null);
+            b.setMaximumSize(null);
+            FindReplacePanel.applyFixed(b);
+        }
+        revalidate();
+    }
+
     /** Moves the focus to the search field (e.g. with Ctrl+F). */
     public void focus() {
         txt.requestFocusInWindow();

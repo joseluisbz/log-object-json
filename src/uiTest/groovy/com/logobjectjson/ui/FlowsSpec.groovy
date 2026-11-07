@@ -454,6 +454,40 @@ class FlowsSpec extends UiSpec {
         out
     }
 
+    def "edit toggle: shows the caret in the JSON; the source text can be made read only"() {
+        given:
+        setText(main(), LOG)
+        waitInSync(main())
+        def jsonToggle = onEdt { findAll(main().@jsonPanel, JToggleButton).find { it.toolTipText == Messages.get('json.editable.tip') } }
+        def srcToggle = onEdt { findAll(main(), JToggleButton).find { it.toolTipText == Messages.get('source.editable.tip') } }
+        def jsonEditor = onEdt { main().@jsonPanel.@editor }
+
+        when:
+        onEdt { jsonToggle.doClick() }
+
+        then: 'the JSON editor is editable, focused and its caret visible'
+        eventually.eventually { assert onEdt { jsonEditor.editable && jsonEditor.hasFocus() && jsonEditor.caret.visible } }
+
+        expect: 'the source starts editable'
+        onEdt { srcToggle.selected && main().@textArea.editable }
+
+        when:
+        onEdt { srcToggle.doClick() }
+
+        then:
+        !onEdt { main().@textArea.editable }
+    }
+
+    def "tree search: the option buttons are not truncated"() {
+        expect:
+        onEdt {
+            def bar = findAll(main(), TreeSearchBar)[0]
+            [bar.@tglCase, bar.@tglWord, bar.@tglRegex].every { b ->
+                b.width >= b.getFontMetrics(b.font).stringWidth(b.text) + b.insets.left + b.insets.right
+            }
+        }
+    }
+
     def "tree search has the editors' options: Cc, W, .*, 'No results' and history"() {
         given:
         setText(main(), LOG)

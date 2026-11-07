@@ -604,6 +604,7 @@ public class TrioPanel extends JPanel {
         bar.add(lblSync);
         bar.add(lblLanguage);
         bar.addSeparator();
+        bar.add(EditToggle.create(textArea, true, Messages.get("source.editable.tip"), null));
         bar.add(btnOpen);
         bar.add(lblFile);
         bar.addSeparator();

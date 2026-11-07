@@ -98,13 +98,8 @@ public class JsonViewerPanel extends JPanel {
         scroll.setRowHeaderView(rowHeader);
 
         // Editable: pencil toggle (highlighted while editing is allowed)
-        var tglEditable = new JToggleButton(new EditIcon(16));
-        tglEditable.setToolTipText(Messages.get("json.editable.tip"));
-        tglEditable.setFocusable(false);
-        tglEditable.addActionListener(e -> {
-            editor.setEditable(tglEditable.isSelected());
-            lblInfo.setText(tglEditable.isSelected() ? Messages.get("json.editMode") : " ");
-        });
+        var tglEditable = EditToggle.create(editor, false, Messages.get("json.editable.tip"),
+                on -> lblInfo.setText(on ? Messages.get("json.editMode") : " "));
 
         // Validate: circle with ✔; turns green ✔ / red ✖ with the result
         var btnValidate = new JButton(validateIcon);
