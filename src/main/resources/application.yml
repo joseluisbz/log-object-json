@@ -1,43 +1,35 @@
-# Valores por defecto de la aplicación.
-# Para cambiarlos sin recompilar, copie este archivo a:
-#   ~/.parser-dinamico/application.yml   o   ./application.yml
-# o use -Dparser.<clave.con.puntos>=valor al lanzar la aplicación
-#   (p. ej. -Dparser.sincronizacion.esperaMs=900).
+# Application defaults.
+# To change them without rebuilding, copy this file to
+#   ~/.log-object-json/application.yml   or   ./application.yml
+# or pass -Dlojson.<dotted.key>=value when launching the application
+#   (e.g. -Dlojson.sync.delayMs=900).
+# UI texts live in messages.properties, not here.
 
-sincronizacion:
-  esperaMs: 600            # ms tras la última tecla antes de re-instanciar
-  maxPestanasAuto: 5       # (reservado) máximo de serializaciones automáticas
+sync:
+  delayMs: 600             # ms after the last keystroke before re-instantiating
 
 json:
-  nombrePorDefecto: Serializacion.json   # cuando el texto no viene intacto de un archivo
+  defaultName: Serialization.json   # used when the text does not come intact from a file
   extension: .json
 
-dialectos:
-  recurso: dialectos.yml   # dialectos por defecto (dentro de la aplicación): java, csharp, python, rust…
-  archivo: dialectos.yml   # archivo propio que agrega/reemplaza dialectos: nombre (buscado en
-                           # ~/.parser-dinamico/ y ./) o ruta absoluta
+dialects:
+  resource: dialects.yml   # built-in dialects (inside the application): java, csharp, python, rust…
+  file: dialects.yml       # your own file that adds/replaces dialects: a name (looked up in
+                           # ~/.log-object-json/ and ./) or an absolute path
 
 extractor:
-  maxCandidatos: 32        # máximo de puntos de inicio probados por línea para hallar el objeto
-  pilaMb: 256              # pila del hilo de parseo (MB): admite anidamientos muy profundos
+  maxCandidates: 32        # max start points tried per line to find the object
+  stackMb: 256             # parsing thread stack (MB): allows very deep nesting
 
 editor:
-  maxLineaAjuste: 20000    # largo de línea a partir del cual no se permite Wrap
-  # Texto de ejemplo (placeholder) que se muestra en gris mientras la fuente está vacía. Vacío = sin sugerencia.
-  sugerencia: |
-    Pegue aquí líneas de log que contengan objetos impresos (o abra un archivo con 📂). Por ejemplo:
+  maxWrapLineLength: 20000 # line length above which Wrap is not allowed
 
-    2026-01-01 12:00:00 INFO [main] Servicio: Persona(nombre=Ana, edad=30, dir=Direccion(calle=Sol, numero=5))
-    2026-01-01 12:00:01 INFO [main] Servicio: Persona { Nombre = Ana, Activo = True }
-    2026-01-01 12:00:02 INFO [main] Servicio: Persona(nombre='Ana', etiquetas=['a', 'b'], extra=None)
-    2026-01-01 12:00:03 INFO [main] Servicio: Persona { nombre: "Ana", punto: Punto(1, 2) }
-
-busqueda:
-  esperaMs: 250
-  maxHistorial: 25
-  maxMarcarTodo: 2000      # máximo de coincidencias resaltadas a la vez
-  lineaLarga: 20000        # en documentos con líneas más largas que esto…
-  maxMarcarLineaLarga: 150 # …resaltar como máximo esta cantidad
-  anchoMin: 120
-  anchoMax: 1200
-  anchoDefecto: 300
+search:
+  delayMs: 250
+  maxHistory: 25
+  maxMarkAll: 2000         # max matches highlighted at once
+  longLine: 20000          # in documents with lines longer than this…
+  maxMarkLongLine: 150     # …highlight at most this many
+  minWidth: 120
+  maxWidth: 1200
+  defaultWidth: 300

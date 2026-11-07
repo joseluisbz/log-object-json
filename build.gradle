@@ -1,10 +1,10 @@
 plugins {
     id 'java'
-    id 'groovy'          // pruebas en Spock (Groovy)
+    id 'groovy'          // Spock tests (Groovy)
     id 'application'
 }
 
-group = 'com.dynamicparser'
+group = 'com.logobjectjson'
 version = '1.0.0'
 
 java {
@@ -13,14 +13,14 @@ java {
 }
 
 application {
-    mainClass = 'com.dynamicparser.Main'
+    mainClass = 'com.logobjectjson.Main'
 }
 
 repositories {
     mavenCentral()
 }
 
-// ── Pruebas de interfaz (necesitan pantalla): source set aparte ─────────────
+// ── UI tests (need a display): separate source set ─────────────────────────────────────
 sourceSets {
     uiTest {
         groovy.srcDir 'src/uiTest/groovy'
@@ -55,7 +55,7 @@ tasks.withType(GroovyCompile).configureEach {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
-    maxHeapSize = '1g'          // la app usa por defecto 1/4 de la RAM; las pruebas de estrés necesitan margen
+    maxHeapSize = '1g'          // the JVM defaults to 1/4 of RAM; stress tests need headroom
     systemProperty 'file.encoding', 'UTF-8'
     testLogging {
         events 'passed', 'skipped', 'failed'
@@ -63,14 +63,14 @@ tasks.withType(Test).configureEach {
     }
 }
 
-// Pruebas sin interfaz: gradle test   (headless)
+// Headless tests: gradle test
 test {
     systemProperty 'java.awt.headless', 'true'
 }
 
-// Pruebas de interfaz (Robot, ventanas reales): gradle uiTest
+// UI tests (Robot, real windows): gradle uiTest
 tasks.register('uiTest', Test) {
-    description = 'Pruebas funcionales de la interfaz Swing (requieren pantalla).'
+    description = 'Functional tests of the Swing UI (require a display).'
     group = 'verification'
     testClassesDirs = sourceSets.uiTest.output.classesDirs
     classpath = sourceSets.uiTest.runtimeClasspath
@@ -80,6 +80,6 @@ tasks.register('uiTest', Test) {
 
 jar {
     manifest {
-        attributes 'Main-Class': 'com.dynamicparser.Main'
+        attributes 'Main-Class': 'com.logobjectjson.Main'
     }
 }

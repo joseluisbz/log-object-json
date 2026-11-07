@@ -1,0 +1,87 @@
+# Object-printing dialects the parser can read.
+#
+# This file is NOT application.yml: application.yml only says which one to use
+# (key dialects.file). To change it without rebuilding, copy this file to
+#   ~/.log-object-json/dialects.yml   or   ./dialects.yml
+# Dialects are merged by "name": one with the same name replaces the one in this
+# file (missing fields are inherited); one with a new name is added.
+# "active: false" disables it.
+#
+# Every active dialect is tried on each log line; the winner is the one that:
+#   1) reaches the end of the line, 2) parses more text, 3) yields more
+#   properties/elements, 4) recognizes more values (quoted strings and the
+#   dialect's literals), 5) appears earlier in the list.
+#
+# Fields:
+#   nulls / trues / falses   literal words (only count if the value ends there)
+#   separators               characters between key and value ("=", ":" or both "=:")
+#   quotes                   characters that delimit strings ('"', "'" or both)
+#   parenObject              Type(k=v, ...)
+#   bracketObject            Type[k=v, ...]          (Java record)
+#   braceObject              Type { k = v, ... }     (C# record, Rust struct)
+#   positional               Type(1, 2) → properties "0", "1" (named tuple)
+#   tuples                   (1, 2) without a name → list
+#   sets                     {1, 2} without separators → list
+#   embeddedJson             {"k": v} is marked as a JSON object
+
+dialects:
+
+  - name: java                   # Lombok @ToString, records, Map/List.toString(), JSON
+    active: true
+    nulls: [ "null" ]
+    trues: [ "true" ]
+    falses: [ "false" ]
+    separators: "="
+    quotes: "\""
+    parenObject: true
+    bracketObject: true
+    braceObject: false
+    positional: false
+    tuples: false
+    sets: false
+    embeddedJson: true
+
+  - name: csharp                 # record.ToString(): Person { Name = Ann, Age = 3 }; anonymous { A = 1 }
+    active: true
+    nulls: [ "null" ]
+    trues: [ "True", "true" ]
+    falses: [ "False", "false" ]
+    separators: "="
+    quotes: "\""
+    parenObject: false
+    bracketObject: false
+    braceObject: true
+    positional: false
+    tuples: true                 # ValueTuple: (1, Ann)
+    sets: false
+    embeddedJson: true
+
+  - name: python                 # repr(): dataclass/pydantic Person(name='Ann', active=True, x=None); dict/list/tuple/set
+    active: true
+    nulls: [ "None" ]
+    trues: [ "True" ]
+    falses: [ "False" ]
+    separators: "=:"             # '=' in dataclasses, ':' in dict
+    quotes: "'\""
+    parenObject: true
+    bracketObject: false
+    braceObject: false
+    positional: true             # datetime.date(2026, 1, 1), Point(1, 2)
+    tuples: true
+    sets: true
+    embeddedJson: false
+
+  - name: rust                   # {:?} Debug: Person { name: "Ann", extra: None, v: Some(5) }; Point(1, 2)
+    active: true
+    nulls: [ "None" ]
+    trues: [ "true" ]
+    falses: [ "false" ]
+    separators: ":"
+    quotes: "\"'"
+    parenObject: true            # tuple structs and variants: Some(5), Point(1, 2)
+    bracketObject: false
+    braceObject: true
+    positional: true
+    tuples: true
+    sets: false
+    embeddedJson: false
