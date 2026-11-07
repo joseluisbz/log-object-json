@@ -35,6 +35,8 @@ import java.util.function.Supplier;
 public class JsonViewerPanel extends JPanel {
 
     private static final Color TAB_LINE_COLOR = new Color(200, 200, 200);
+    /** Vertical gap between the toolbar and the content (neighbor panels use the same one to align). */
+    public static final int TOOLBAR_GAP = 4;
 
     private final JsonEditor editor;
 
@@ -58,7 +60,7 @@ public class JsonViewerPanel extends JPanel {
      *                (String segments = key, Integer = index), or null.
      */
     public JsonViewerPanel(String json, Consumer<List<Object>> locator) {
-        super(new BorderLayout(0, 4));
+        super(new BorderLayout(0, TOOLBAR_GAP));
 
         editor = new JsonEditor(json);
         editor.setLocator(locator);

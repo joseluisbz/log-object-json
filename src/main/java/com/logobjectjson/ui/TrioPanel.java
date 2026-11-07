@@ -626,7 +626,7 @@ public class TrioPanel extends JPanel {
 
     /** Bottom panel: result tree | JSON. */
     private JPanel resultPanel() {
-        var treePanel = new JPanel(new BorderLayout());
+        var treePanel = new JPanel(new BorderLayout(0, JsonViewerPanel.TOOLBAR_GAP));
         treePanel.setBorder(BorderFactory.createTitledBorder(Messages.get("tree.title")));
         // The tree's search bar is as tall as the JSON toolbar next to it (aligned rows)
         var treeBar = new JToolBar() {

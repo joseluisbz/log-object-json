@@ -52,6 +52,12 @@ class FlowsSpec extends UiSpec {
             def jsonBars = main().@jsonPanel.@bars
             treeBar.height == jsonBars.height
         }
+        onEdt {   // the tree and the JSON editor start at the same height (same gap under the toolbars)
+            def treeScroll = SwingUtilities.getAncestorOfClass(JScrollPane, tree(main()))
+            def jsonScroll = findAll(main().@jsonPanel, JScrollPane)[0]
+            SwingUtilities.convertPoint(treeScroll.parent, treeScroll.location, main()).y ==
+                    SwingUtilities.convertPoint(jsonScroll.parent, jsonScroll.location, main()).y
+        }
 
         when: 'the text stops being a valid object'
         setText(main(), 'no objects here')
