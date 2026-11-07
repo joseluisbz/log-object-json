@@ -262,51 +262,65 @@ public class TrioPanel extends JPanel {
             }
         });
 
-        // Right click on a tree node
+        // Node actions: translucent menu on hover, fixed and interactive on right click
+        var nodeMenu = HoverActionMenu.install(resultTree, this::nodeActionsAt);
         resultTree.addMouseListener(new MouseAdapter() {
-            @Override public void mousePressed(MouseEvent e)  { showMenu(e); }
-            @Override public void mouseReleased(MouseEvent e) { showMenu(e); }
+            @Override public void mousePressed(MouseEvent e)  { selectOnPopup(e); }
+            @Override public void mouseReleased(MouseEvent e) { selectOnPopup(e); }
+        });
+        // Keyboard: Shift+F10 / context-menu key opens the menu on the selected node
+        Runnable menuOnSelection = () -> {
+            int row = resultTree.getLeadSelectionRow();
+            var r = row < 0 ? null : resultTree.getRowBounds(row);
+            if (r != null) nodeMenu.fixAt(new Point(r.x + Math.min(r.width, 40), r.y + r.height));
+        };
+        for (var ks : List.of(KeyStroke.getKeyStroke(KeyEvent.VK_F10, InputEvent.SHIFT_DOWN_MASK),
+                              KeyStroke.getKeyStroke(KeyEvent.VK_CONTEXT_MENU, 0))) {
+            resultTree.getInputMap().put(ks, "nodeMenu");
+        }
+        resultTree.getActionMap().put("nodeMenu", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { menuOnSelection.run(); }
         });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Tree context menu
+    // Node actions (tree)
     // ─────────────────────────────────────────────────────────────────────────
 
-    private void showMenu(MouseEvent e) {
-        if (!e.isPopupTrigger()) return;
-        int row = resultTree.getClosestRowForLocation(e.getX(), e.getY());
-        var path = row < 0 ? null : resultTree.getPathForRow(row);
-        if (path == null || !resultTree.getRowBounds(row).contains(e.getPoint())) return;
-        resultTree.setSelectionPath(path);
+    private static final Icon ICON_ANALYZE = new HoverActionMenu.GlyphIcon("⧉", new Color(45, 105, 200));
+    private static final Icon ICON_JSON = new HoverActionMenu.GlyphIcon("{}", new Color(30, 140, 90));
+    private static final Icon ICON_TEXT = new HoverActionMenu.GlyphIcon("¶", new Color(120, 120, 120));
 
-        var node = (DefaultMutableTreeNode) path.getLastPathComponent();
-        boolean hasValue = node.getUserObject() instanceof TreeNodeValue;
+    /** Tree node under p (only on the row's label/icon), or null. */
+    private DefaultMutableTreeNode nodeAt(Point p) {
+        int row = resultTree.getRowForLocation(p.x, p.y);
+        if (row < 0) return null;
+        var node = (DefaultMutableTreeNode) resultTree.getPathForRow(row).getLastPathComponent();
+        return node.getUserObject() instanceof TreeNodeValue ? node : null;
+    }
 
-        var menu = new JPopupMenu();
-
-        Object v = hasValue ? ((TreeNodeValue) node.getUserObject()).value() : null;
+    /** Actions available on the node under p (empty if there is no node). */
+    private List<HoverActionMenu.Item> nodeActionsAt(Point p) {
+        var node = nodeAt(p);
+        if (node == null) return List.of();
+        Object v = ((TreeNodeValue) node.getUserObject()).value();
         boolean isContainer = (v instanceof DynamicObject || v instanceof Map || v instanceof List) && node != root;
-        var itemExtract = new JMenuItem(Messages.get("menu.analyzeNode"));
-        itemExtract.setEnabled(isContainer && branchOpener != null);
-        itemExtract.setToolTipText(Messages.get("menu.analyzeNode.tip"));
-        itemExtract.addActionListener(ev -> extractBranch(node));
-        menu.add(itemExtract);
-        menu.addSeparator();
-
-        // Locate in the JSON, if it contains this node
         JsonViewerPanel target = panelContaining(node);
-        var itemLocate = new JMenuItem(Messages.get(target != null ? "menu.locateInJson" : "menu.locateInJson.none"));
-        itemLocate.setEnabled(target != null);
-        itemLocate.addActionListener(ev -> locateInJson(target, node));
-        menu.add(itemLocate);
+        return List.of(
+                new HoverActionMenu.Item(Messages.get("menu.analyzeNode"), ICON_ANALYZE,
+                        isContainer && branchOpener != null, Messages.get("menu.analyzeNode.tip"),
+                        () -> extractBranch(node)),
+                new HoverActionMenu.Item(Messages.get(target != null ? "menu.locateInJson" : "menu.locateInJson.none"),
+                        ICON_JSON, target != null, null, () -> locateInJson(target, node)),
+                new HoverActionMenu.Item(Messages.get("menu.locateInText"), ICON_TEXT,
+                        instantiatedText != null, null, () -> locateInSource(node, List.of())));
+    }
 
-        var itemText = new JMenuItem(Messages.get("menu.locateInText"));
-        itemText.setEnabled(hasValue && instantiatedText != null);
-        itemText.addActionListener(ev -> locateInSource(node, List.of()));
-        menu.add(itemText);
-
-        menu.show(resultTree, e.getX(), e.getY());
+    /** A right click also selects the node it was made on. */
+    private void selectOnPopup(MouseEvent e) {
+        if (!e.isPopupTrigger()) return;
+        var node = nodeAt(e.getPoint());
+        if (node != null) resultTree.setSelectionPath(new TreePath(node.getPath()));
     }
 
     private void serializeNode(DefaultMutableTreeNode node) {

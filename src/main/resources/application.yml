@@ -33,3 +33,9 @@ search:
   minWidth: 120
   maxWidth: 1200
   defaultWidth: 300
+
+hoverMenu:                 # node actions menu (tree): translucent on hover, fixed on right click
+  ghostOpacity: 0.35       # opacity while it follows the cursor (0..1)
+  offsetX: 18              # position relative to the cursor while following it (px)
+  offsetY: -6              #   (negative = above the cursor, so it does not cover the tooltip)
+  fadeMs: 160              # duration of the translucent → opaque transition

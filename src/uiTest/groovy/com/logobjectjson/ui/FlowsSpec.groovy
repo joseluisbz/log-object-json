@@ -6,6 +6,8 @@ import com.logobjectjson.Messages
 import spock.lang.TempDir
 
 import javax.swing.*
+import java.awt.Point
+import java.awt.Robot
 import javax.swing.tree.TreePath
 import java.nio.file.Files
 import java.nio.file.Path
@@ -271,6 +273,73 @@ class FlowsSpec extends UiSpec {
         !onEdt { main().@textArea.lineWrap }
         def firstLine = Messages.get('source.wrap.tooLong', length + 'G(a=)'.length()).readLines()[0]
         dialogs.any { it.contains(firstLine) }
+    }
+
+    def "node action menu: ghost on hover, fixed on right click, runs an option, Escape closes"() {
+        given:
+        setText(main(), LOG)
+        waitInSync(main())
+        def t = tree(main())
+        Point nodePoint = onEdt {
+            def n = node(main(), 'customer')
+            def r = t.getPathBounds(new javax.swing.tree.TreePath(n.path))
+            def p = new Point((r.@x + 20) as int, (r.@y + r.@height.intdiv(2)) as int)
+            SwingUtilities.convertPointToScreen(p, t)
+            p
+        }
+        def robot = new Robot()
+        def menu = { -> onEdt { frame.layeredPane.getComponentsInLayer(JLayeredPane.POPUP_LAYER).find { it instanceof HoverActionMenu } } }
+
+        when: 'hover over the node'
+        robot.mouseMove(nodePoint.@x, nodePoint.@y)
+        robot.mouseMove(nodePoint.@x + 2, nodePoint.@y)
+        robot.waitForIdle()
+
+        then: 'a translucent menu follows the cursor and does not take the mouse'
+        eventually.eventually { assert menu() != null && onEdt { menu().@state.toString() } == 'GHOST' }
+        !onEdt { menu().contains(5, 5) }
+
+        when: 'right click on the node'
+        robot.mousePress(java.awt.event.InputEvent.BUTTON3_DOWN_MASK)
+        robot.mouseRelease(java.awt.event.InputEvent.BUTTON3_DOWN_MASK)
+        robot.waitForIdle()
+
+        then: 'it freezes, becomes opaque and interactive, and the node is selected'
+        eventually.eventually {
+            assert onEdt { menu().@state.toString() } == 'FIXED'
+            assert onEdt { menu().@alpha } == 1f
+        }
+        onEdt { menu().contains(10, 10) }
+        onEdt { t.selectionPath.lastPathComponent.toString() }.startsWith('customer')
+
+        when: 'left click on "Locate in the text" (third option)'
+        Point option = onEdt {
+            def m = menu()
+            def p = new Point(30, 4 + 2 * 24 + 12)
+            SwingUtilities.convertPointToScreen(p, m)
+            p
+        }
+        robot.mouseMove(option.@x, option.@y)
+        robot.mousePress(java.awt.event.InputEvent.BUTTON1_DOWN_MASK)
+        robot.mouseRelease(java.awt.event.InputEvent.BUTTON1_DOWN_MASK)
+        robot.waitForIdle()
+
+        then: 'the action runs and the menu closes'
+        eventually.eventually { assert onEdt { main().@textArea.selectedText } == 'customer' }
+        menu() == null
+
+        when: 'open it again and press Escape'
+        robot.mouseMove(nodePoint.@x, nodePoint.@y)
+        robot.mousePress(java.awt.event.InputEvent.BUTTON3_DOWN_MASK)
+        robot.mouseRelease(java.awt.event.InputEvent.BUTTON3_DOWN_MASK)
+        robot.waitForIdle()
+        eventually.eventually { assert onEdt { menu()?.@state?.toString() } == 'FIXED' }
+        robot.keyPress(java.awt.event.KeyEvent.VK_ESCAPE)
+        robot.keyRelease(java.awt.event.KeyEvent.VK_ESCAPE)
+        robot.waitForIdle()
+
+        then:
+        eventually.eventually { assert menu() == null }
     }
 
     def "stress: with a ~250,000 character line the UI keeps responding"() {
