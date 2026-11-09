@@ -53,13 +53,28 @@ No class definitions are needed: the object is rebuilt dynamically from its prin
 
 ## Requirements
 
-- Java **17** or newer.
-- Gradle (to build and run from source).
+- **JDK 17** or newer (e.g. [Eclipse Temurin](https://adoptium.net)) — check with `java -version`.
+- **Gradle** ([gradle.org](https://gradle.org/install/), or `winget` / `brew` / `sdkman`) — check with `gradle -v`.
 
 ## Run
 
+On any computer (Windows, macOS or Linux):
+
 ```bash
+git clone https://github.com/joseluisbz/log-object-json.git
+cd log-object-json
 gradle run
+```
+
+The first run needs internet access to download the dependencies (Jackson, RSyntaxTextArea…);
+later runs work offline.
+
+To get a runnable jar instead:
+
+```bash
+gradle installDist
+# then: build/install/log-object-json/bin/log-object-json      (Linux/macOS)
+#       build\install\log-object-json\bin\log-object-json.bat  (Windows)
 ```
 
 ## Tests
